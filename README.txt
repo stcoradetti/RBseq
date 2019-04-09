@@ -5,6 +5,9 @@ Please note, this is scientific software for research purposes only.  It is offe
 
 Updated 8 April 2019
 
+This software is currently unpublished, but is based on analysis published in 'Functional genomics of lipid metabolism in the oleaginous yeast Rhodosporidium toruloides' by Coradetti et al. 2018 (DOI: 10.7554/eLife.32110.001) and Rapid Quantification of Mutant Fitness in Diverse Bacteria by Sequencing Randomly Bar-Coded Transposons by Wetmore et al 2015 (DOI 10.1128/mBio.00306-15).
+
+
 --OVERVIEW--
 RBseq is a python-based pipeline for performing genome-wide experiments to quantify the relative fitness of random insertion mutants with unique sequence barcodes.  This software was developed specifically with fungal genomes in mind, but theoretically should work with any eukaryotic genome.
 
