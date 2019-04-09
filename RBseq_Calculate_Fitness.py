@@ -20,15 +20,15 @@ def main(argv):
     timestamp = datetime.now().strftime('%Y%m%H%M')
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--metafile", dest="metafile", help="Metadata file for BarSeq runs. A tab-delimited file with columns titled Sample, Group, Reference, OutputDir, PoolCountFile.  Entires in the Sample and Reference columns must correspond to column heading in the poolCountFile. Samples from biological replicates ",default="metafile.txt")
-    parser.add_argument("-l", "--logFile", dest="logFile", help="File to write run log to. Default is FitnessLog_TIMESTAMP.log",default="FitnessLog_"+timestamp+".log")
+    parser.add_argument("-l", "--logFile", dest="logFile", help="File to write run log to. Default is Fitness_TIMESTAMP.log",default="Fitness_"+timestamp+".log")
     parser.add_argument("-L", "--normLocal", dest="normLocal", help="-L [int]: Normalize fitness scores such that local windows of [int] contiguous insertions have a median fitness score of zero.  Default behavior is to normalize fitness scores accross full contigs such that the median fitness score is zero", default=0, type=int)
     parser.add_argument("-s", "--fitnessStartBoundary", dest="fitnessStartBoundary", help="Integer 0-100. Fraction of the region between coding start and coding stop to set as start boundary for calculating gene fitness.  Default is 5: i.e. insertions in the first 5 percent of the region between start and stop will not be included in calculations for gene fitness scores or statistical tests", default=5, type=int)
     parser.add_argument("-e", "--fitnessEndBoundary", dest="fitnessEndBoundary", help="Integer 0-100. Fraction of the region between coding start and coding stop to set as end boundary for calculating gene fitness.  Default is 95: i.e. insertions in the last 5 percent of the region between start and stop will not be included in calculations for gene fitness scores or statistical tests", default=95, type=int)
     parser.add_argument("-i", "--minInsertionCounts", dest="minInsertionCounts", help="Integer. Minimum counts each insertion must have between both the test condition and the reference condition to be included in calculations for gene fitness scores or statistical tests. Default is 3", default=3, type=int)
     parser.add_argument("-g", "--minGeneCounts", dest="minGeneCounts", help="Integer. Minimum total counts across all insertions in a given gene before gene fitness scores are calculated. Default is 20", default=20, type=int)
     parser.add_argument("-I", "--minInsertions", dest="minInsertions", help="Integer. Minimum number of insertions with sufficient counts in a given gene before gene fitness scores are calculated. Default is 3", default=3, type=int)
-    parser.add_argument("-W", "--maxWeightCounts", dest="maxWeightCounts", help="Integer. Maximum number of counts to be used for gene fitness score calculation.  E.g. if set at 50 then two insertions with 50 and 100 counts would be wieghted equally in computing gene fitness, but an insertion with 10 counts would have a smaller weight ", default=50, type=int)
-    parser.add_argument("-P", "--smartPseudoCounts", dest="smartPseudoCounts", action='store_false', help="If this flag is passed, fitness scores will be computed without 'smart' pseudocounts as in Wetmore et al 2015.", default=True)
+    parser.add_argument("-W", "--maxWeightCounts", dest="maxWeightCounts", help="Integer. Maximum number of counts to be used for gene fitness score calculation.  E.g. if set at 50 then two insertions with 50 and 100 counts would be weighted equally in computing gene fitness, but an insertion with 10 counts would have a smaller weight ", default=50, type=int)
+    parser.add_argument("-P", "--noPseudoCounts", dest="smartPseudoCounts", action='store_false', help="If this flag is passed, fitness scores will NOT be computed without 'smart' pseudocounts as in Wetmore et al 2015.", default=True)
     parser.add_argument("-B", "--fitnessBrowserOutput", dest="fitnessBrowserOutput", action='store_true', help="If this flag is passed, output files will be saved in formats compatible with the Arkin Lab Fitness Browser", default=False)
 
     options = parser.parse_args()
@@ -36,7 +36,7 @@ def main(argv):
 
     statusUpdate = 'RBseq_Calculate_Fitness.py  Samuel Coradetti 2019.'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.3'
+    statusUpdate = 'Version 1.0.4'
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
@@ -74,7 +74,7 @@ def main(argv):
             sys.exit()
 
     if options.fitnessBrowserOutput:
-        requiredColumns=['SetName','Group','Index','short','Condition_1']
+        requiredColumns=['SetName','Group','Index','short','Condition_1','Date']
         for requiredColumn in requiredColumns:
             if requiredColumn not in metaFrame.columns:
                 statusUpdate = "-B option passed but metadata file is missing column "+requiredColumn+" ...exiting."
@@ -272,7 +272,7 @@ def main(argv):
         for sampNum in sampleNumbers:
             rollingMean = []
             for scaffold,scaffoldGroup in strainFit.groupby('scaffold'):
-                rollingMean.extend(scaffoldGroup[sampNum].rolling(window,center=True).mean().fillna(method='ffill').fillna(method='bfill').values)
+                rollingMean.extend(scaffoldGroup[sampNum].rolling(window,center=True).median().fillna(method='ffill').fillna(method='bfill').values)
             strainFit[sampNum] = strainFit[sampNum] - rollingMean
 
     statusUpdate = 'Calculating gene fitness'

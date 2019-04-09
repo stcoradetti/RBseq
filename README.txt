@@ -1,9 +1,9 @@
 # RBseq
 Track fitness of deletion mutants with a randomly barcoded random insertion library
 
-Please note, this is scientific software for research purposes only.  It is offered freely with no guarantees whatsoever.
+Please note, this is scientific software for research purposes only.  It is offered freely in the hope that it will be useful, but with no guarantees whatsoever.  It has been tested, but only modestly.  Proceed with caution.
 
-Updated 5 April 2019
+Updated 8 April 2019
 
 --OVERVIEW--
 RBseq is a python-based pipeline for performing genome-wide experiments to quantify the relative fitness of random insertion mutants with unique sequence barcodes.  This software was developed specifically with fungal genomes in mind, but theoretically should work with any eukaryotic genome.
@@ -158,7 +158,7 @@ RBseq_Map_Insertions.py Outputs
 
 --
 RBseq_Annotate_Insertions.py Inputs
-python RBseq_Annotate_insertions.py -m metadatafile [-l logfile -P 500 -T 100]
+python RBseq_Annotate_insertions.py -m metadatafile [--logFile logfile --promoterLength 500 --terminatorLength 100]
 
   -m/--metafile METAFILE
     Metadata file for TnSeq runs. Same as for RBseq_Map_Insertions.py.  For each unique entry in the Pool column of the metafile, this script will look for files named POOL_poolfile in the matching 'OutputDir' column.  Gene annotations are taken from the GFF file specified in the column 'GeneLocations'.  This GFF should contain mRNA features and CDS features to identify transcript and exon boundaries.  The Parent field in the mRNA features is the default source of gene ids to add to the pool file, but any field specified by Name=value in the GFF's mRNA features can be used by setting the 'GeneIdentifier' field in the metafile to Name.  The 'GeneAnnotations' field is the path and name of tab-delimited text file containing custom annotations and alternate names for your genes. This file should contain the headers 'ID','AlternateID', and 'Annotation' where 'ID' contains the same identifiers as present in the GFF file.
@@ -191,7 +191,7 @@ RBseq_Annotate_Insertions.py Outputs
 
 --
 RBseq_Count_Barcodes.py Inputs
-python RBseq_Count_Barcodes.py -m metadatafile [-l logfile -b 6 -a 6 -q 10]
+python RBseq_Count_Barcodes.py -m metadatafile [-l logfile --matchBefore 6 --matchAfter 6 --qual 10]
 
   -m/--metafile METAFILE
     Metadata file for BarSeq runs. Contains the following columns:
@@ -254,26 +254,159 @@ RBseq_Count_Barcodes.py Outputs
 
 --
 RBseq_Calculate_Fitness.py Inputs
-python RBseq_Count_Barcodes.py -m metadatafile [-l logfile -L 0 -s 5 -e 95 -i 3 -g 20 -I 3 -W 50 -P -B]
+python RBseq_Count_Barcodes.py -m metadatafile [--logFile logfile --normLocal 0 --fitnessStartBoundary 5 --fitnessEndBoundary 95 --minInsertionCounts 3 --minGeneCounts 20 --minInsertions 3 --maxWeightCounts 50 --noPseudoCounts --fitnessBrowserOutput]
 
   -m/--metafile METAFILE
     Metadata file for fitness calculation. Contains the following columns:
+    
+      Condition
+        A succinct, but informative name for an experimental condition. This identical name should be repeated on each line for biological replicates from that condition.
 
-    parser.add_argument("-m", "--metafile", dest="metafile", help="Metadata file for BarSeq runs. A tab-delimited file with columns titled Sample, Group, Reference, OutputDir, PoolCountFile.  Entires in the Sample and Reference columns must correspond to column heading in the poolCountFile. Samples from biological replicates ",default="metafile.txt")
-    parser.add_argument("-l", "--logFile", dest="logFile", help="File to write run log to. Default is FitnessLog_TIMESTAMP.log",default="FitnessLog_"+timestamp+".log")
-    parser.add_argument("-L", "--normLocal", dest="normLocal", help="-L [int]: Normalize fitness scores such that local windows of [int] contiguous insertions have a median fitness score of zero.  Default behavior is to normalize fitness scores accross full contigs such that the median fitness score is zero", default=0, type=int)
-    parser.add_argument("-s", "--fitnessStartBoundary", dest="fitnessStartBoundary", help="Integer 0-100. Fraction of the region between coding start and coding stop to set as start boundary for calculating gene fitness.  Default is 5: i.e. insertions in the first 5 percent of the region between start and stop will not be included in calculations for gene fitness scores or statistical tests", default=5, type=int)
-    parser.add_argument("-e", "--fitnessEndBoundary", dest="fitnessEndBoundary", help="Integer 0-100. Fraction of the region between coding start and coding stop to set as end boundary for calculating gene fitness.  Default is 95: i.e. insertions in the last 5 percent of the region between start and stop will not be included in calculations for gene fitness scores or statistical tests", default=95, type=int)
-    parser.add_argument("-i", "--minInsertionCounts", dest="minInsertionCounts", help="Integer. Minimum counts each insertion must have between both the test condition and the reference condition to be included in calculations for gene fitness scores or statistical tests. Default is 3", default=3, type=int)
-    parser.add_argument("-g", "--minGeneCounts", dest="minGeneCounts", help="Integer. Minimum total counts across all insertions in a given gene before gene fitness scores are calculated. Default is 20", default=20, type=int)
-    parser.add_argument("-I", "--minInsertions", dest="minInsertions", help="Integer. Minimum number of insertions with sufficient counts in a given gene before gene fitness scores are calculated. Default is 3", default=3, type=int)
-    parser.add_argument("-W", "--maxWeightCounts", dest="maxWeightCounts", help="Integer. Maximum number of counts to be used for gene fitness score calculation.  E.g. if set at 50 then two insertions with 50 and 100 counts would be wieghted equally in computing gene fitness, but an insertion with 10 counts would have a smaller weight ", default=50, type=int)
-    parser.add_argument("-P", "--smartPseudoCounts", dest="smartPseudoCounts", action='store_false', help="If this flag is passed, fitness scores will be computed without 'smart' pseudocounts as in Wetmore et al 2015.", default=True)
-    parser.add_argument("-B", "--fitnessBrowserOutput", dest="fitnessBrowserOutput", action='store_true', help="If this flag is passed, output files will be saved in formats compatible with the Arkin Lab Fitness Browser", default=False)
+      Sample
+        Name for each biological sample for fitness calculation.  Should match SampleName columns in the RBseq_Count_Barcodes.py metadata file.
+
+      Reference	
+        The reference sample for each experimental sample.  In the most basic fitness experiments this will be either a 'time 0' of recovered mutant pool before it is grown under the experimental condition, or a sample started from the same seed culture as the experimental sample and grown the same time or same number of cell divisions in a reference condition.  The same reference sample can be used for multiple conditions, if appropriate, for example if three independent starter cultures were each used seed independent replicates for several different experimental conditions.
+
+      Paired
+        TRUE or FALSE.  Ideally each for each condition of interest there will be three or more biological replicates, each of which was seeded from an independent starter culture used as a reference, or which can each be paired to a replicate in the reference condition which was seeded form the same starter culture.  Paring of these samples is important for testing statistical significance of fitness scores.  If FALSE is passed for any of the samples in a given condition, then normalized BarSeq counts for all passed referenced samples will be averaged and used a common reference sample for each replicate.  This would be the case, for example, if a single starter culture was used to seed three biological replicates for a given condition and three technical replicate samples were taken from that one culture as reference samples. 
+
+      OutputDir
+        Output directory for results.  Only the first entry in this column is actually used.
+
+      PoolCountFile
+        Poolcounts file from RBseq_Count_Barcodes.py
+
+
+  -l/--logFile LOGFILE
+    File to write run log to. Default is Fitness_TIMESTAMP.log
+
+  -L/--normLocal NEIGHBORHOOD
+    Integer. By default normalization is achieved by normalizing barcode counts in the mapped pool across input samples.  However in some species (particularly in bacteria) large biases in observed fitness scores are seen across the genome.  If correcting these large scale biases is desirable, passing -L 200 for example will normalize fitness scores across a sliding window of 200 kilobases such that the median strain fitness is 0.   
+
+  -s/--fitnessStartBoundary STARTBOUNDARY
+    Integer 0-100. Fraction of the region between coding start and coding stop to set as start boundary for calculating gene fitness.  Default is 5: i.e. insertions in the first 5 percent of the region between start and stop will not be included in calculations for gene fitness scores or statistical tests
+
+  -e/--fitnessEndBoundary ENDBOUNDARY
+    Integer 0-100. Fraction of the region between coding start and coding stop to set as end boundary for calculating gene fitness.  Default is 95: i.e. insertions in the last 5 percent of the region between start and stop will not be included in calculations for gene fitness scores or statistical tests
+
+  -i/--minInsertionCounts INSERTCOUNTS
+    Integer. Minimum counts each insertion must have between both the test condition and the reference condition to be included in calculations for gene fitness scores or statistical tests. Default is 3
+
+  -g/--minGeneCounts GENECOUNTS
+    Integer. Minimum total counts across all insertions in a given gene before gene fitness scores are calculated. Default is 20
+
+  -I/--minInsertions INSERTIONS
+    Integer. Minimum number of insertions with sufficient counts in a given gene before gene fitness scores are calculated. Default is 3
+
+  -W/--maxWeightCounts COUNTS
+    Integer. Maximum counts to be used for gene fitness score calculation.  E.g. if set at 50, then two insertions with 50 and 100 counts would be weighted equally in computing gene fitness, but an insertion with 10 counts would have a smaller weight
+
+  -P/--noPseudoCounts
+    If this flag is passed, fitness scores will NOT be computed without 'smart' pseudo counts as in Wetmore et al 2015.  'Smart' pseudo counts improve the accuracy of fitness scores when one condition has very low or no counts.  As smart pseudo counts use data from all insertions in a gene to adjust the counts used for computing fitness scores for individual insertions, it can be argued that they abolish independence of those scores and compromise the stringency of any statistical analysis of those scores. This author believes that they are, on balance, useful, but others may disagree.
+
+  -B/--fitnessBrowserOutput
+    If this flag is passed, a subdirectory in the output directory called Fitness Browser will be created with output files compatible with the LBNL fitness browser by Morgan Price (https://bitbucket.org/berkeleylab/feba). If this flag is passed, the metadata file will require these additional column headings:
+
+      Date -OR- Date_pool_expt_started
+        Date of experiment
+
+     SetName
+       setA, setB, setC... etc labels for each set of related experiments performed from the same starter cultures at the same time
+
+     Group
+       A short informative name grouping experiments.  E.g. 'Carbon_sources' or 'Antibiotics', etc.
+
+     Index
+       A name for each condition (could simply be a repeat of the condition column, or something more compact like a short abbreviation)
+
+     short
+       A short human-readable name for each condition   
+
+     Condition_1
+       A more complete description for each condition, or key variable.
 
 RBseq_Calculate_Fitness.py Outputs
 
+  geneFit.txt
+  Fitness scores aggregated across all insertions in each gene, averaged between biological replicates for each condition
 
+  geneFit_individual_replicates.txt
+  Fitness scores aggregated across all insertions in each gene, but with scores for individual replicates conserved
+
+  Tstats.txt
+  T-like test statistics calculated as in Wetmore et al, 2015 with all strain fitness scores aggregated for each gene across biological replicates.
+
+  Tstats_individual_replicates.txt
+  T-like test statistics calculated as in Wetmore et al, 2015 with all strain fitness scores aggregated for each gene, but with Tstats calculated for each replicate
+
+  pVals.txt
+  P-values from T-like test statistics if treated as true T-statistics, after multiple hypothesis correction with the Benjamini-Hochberg procedure.
+  pVals_Wilcoxon.txt
+  P-values from a Wilcoxon Signed Rank Test on normalized BarSeq counts in each condition versus reference samples, after multiple hypothesis correction with the Benjamini-Hochberg procedure.  The signed rank test is less sensitive than T-test approach, but assumes nothing about the distribution of the data, whereas the Pvalues from the Tstats are only valid when the Tstats approximate a normal distribution for truly random data (see QQplots below). Thus the signed rank test P-values should be considered conservative but more robust.
+
+  qualityStats.txt
+  A table of summary statistics that may inform the overall quality of the experiments
+    Condition
+      Name of condition
+
+    nMapped
+      Number of barcodes seen in this condition and reference samples
+
+    nGenic
+      Number of barcodes in the analyzed portion of gene coding regions in this condition and reference samples
+
+    nUsed
+      Number of barcodes actually used for fitness calculations
+
+    gMed
+      Median counts per gene in condition samples
+
+    gMedt0
+      Median counts per gene in reference samples
+ 
+    gMean
+      Mean counts per gene in conditions samples
+
+    cor12
+      Average correlation between fitness scores from insertions in the first and second half of the gene
+
+    mad12
+      Mean absolute difference in fitness scores from insertions in the first and second half of the gene
+
+    gccor
+      Correlation between strain fitness scores local GC content
+
+    adjcor
+      Correlation between fitness scores for adjacent genes
+
+    maxFit
+      Maximum fitness score observed in the experiment
+    specificPhenotypes.txt
+    A table of genes and conditions for which magnitude of fitness scores was greater than the 95 percentile across all experiments + 0.5.  That is is a table of uniquely strong fitness scores.
+
+  strainFit.txt
+    A table of fitness scores calculated for every insertion tracked
+
+  strainFitUsed.txt
+    A table of fitness scores for only the insertions used in fitness analysis
+  QCplots
+
+    A folder with the following plots for each condition
+
+    CONDITION_cor12.pdf
+      A plot of fitness scores calculated only from insertions in the first half of the gene versus those calculated in the second half of the gene.  In a usable experiment, data points should mostly cluster around the origin, with a line of significant fitness scores along a diagonal line through the origin
+
+    CONDITION_fit_v_position.pdf
+      A plot of gene fitness scores versus chromosomal position on the largest scaffold in the genome.  In a usable experiment data points should be cluster around the zero axis without any clear positional bias.  If positional biases are observed consider using the -L/--normLocal option.
+
+    CONDITION_GCcor.pdf
+      A plot of strain fitness versus local GC percent.
+
+    CONDITION_qq.pdf
+      A quantile-quantile plot of Tstats versus a standard normal distribution.  If the Tstats followed a perfect standard normal, they would fall along the diagonal line on the plot.  Tstats from theoretically identical populations (e.g. a collection of comparisons between 'Time 0' replicates, or Tstats from the mutant pool grown in the same condition as the library was constructed) should hold closely to this line.  In an experiment in which the Tstats are useful, the Tstats should follow this diagonal line near the origin, then diverge at the edges of the distribution as genes with true fitness effects have more extreme T-stats than would be expected from a normal distribution. If Tstats do not follow this expected pattern, use of the more conservative P-values from the Wilcoxon Signed Rank Test is recommended over using P-values from the Tstats. 
+   
+
 --LICENSE--
 Copyright (C) 2019 Samuel Coradetti and the United States Department of Energy. All rights reserved.
 

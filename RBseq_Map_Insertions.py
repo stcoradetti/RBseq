@@ -109,7 +109,7 @@ def main(argv):
 
     statusUpdate = 'RBseq_Map_Insertions.py  Samuel Coradetti 2019.'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.3'
+    statusUpdate = 'Version 1.0.4'
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
