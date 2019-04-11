@@ -61,7 +61,7 @@ def main(argv):
 
     statusUpdate = 'RBseq_Count_BarCodes.py  Samuel Coradetti 2019.'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.4'
+    statusUpdate = 'Version 1.0.5'
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
@@ -126,8 +126,14 @@ def main(argv):
 
     allCounts = {}
 
+
     for fastqNum,fastqFile in enumerate(fastqFiles):
         sampleName = sampleNames[fastqNum]
+        noPreSeq = 0
+        noPostSeq = 0
+        noDualIndex = 0
+        nonCompliantBarcode = 0
+        poorQualityBarcode = 0
         if useCounted[fastqNum]:
             statusUpdate = '  Loading previously counted reads for '+fastqFile
             printUpdate(options.logFile,statusUpdate)
@@ -177,6 +183,7 @@ def main(argv):
 
             #Define the short sequences to search for flanking barcodes
             searchBefore = beforeBarcode[-options.matchBefore:]
+            
 
             #Find the expected positions for search sequences
             offsetBefore = skipBases + len(dualIndex) + len(beforeBarcode) - len(searchBefore)
@@ -217,6 +224,7 @@ def main(argv):
                             if not dualIndex == "":
                                 if readSeq[skipBases:skipBases + len(dualIndex) + phasingBases].find(dualIndex) == -1:                           
                                     passIndex = False
+                                    noDualIndex+=1
 
                             compliantBarcode = False
                             if passIndex:
@@ -239,10 +247,17 @@ def main(argv):
                                             barcode = prebarcode[:allowedlength]
                                             if bool(re.match('^[AGCT]+$', barcode)):
                                                 compliantBarcode = True
+                                            else:
+                                                nonCompliantBarcode+=1
+                                        elif n == len(allowedLengths) - 1:
+                                            noPostSeq+=1
                                         n += 1
                                     barQual = readQual[offsetBarcode + matchedBefore:offsetBarcode + matchedBefore + allowedlength]
                                     if min(map(ord,list(barQual)))-33 < options.minQual:
                                         compliantBarcode = False
+                                        poorQualityBarcode+=1
+                                else:
+                                    noPreSeq+=1
 
 
                             if compliantBarcode:
@@ -271,8 +286,22 @@ def main(argv):
                 statusUpdate = "      At least two bases following these barcodes matched the expected sequence." 
                 printUpdate(options.logFile,statusUpdate)
 
-            statusUpdate = "    " + str(NbarcodeNotFound) + " reads without recognizable, compliant barcodes"
+
+            statusUpdate = "    " + str(NbarcodeNotFound) + " reads without recognizable, compliant barcodes."
             printUpdate(options.logFile,statusUpdate)
+            if noDualIndex:
+                statusUpdate = "      " + str(noDualIndex) + " reads without expected Dual Index."
+                printUpdate(options.logFile,statusUpdate)
+            statusUpdate = "      " + str(noPreSeq) + " reads without expected sequence before the barcode region."
+            printUpdate(options.logFile,statusUpdate)
+            statusUpdate = "      " + str(noPostSeq) + " reads without expeced sequence after the barcode region."
+            printUpdate(options.logFile,statusUpdate)
+            statusUpdate = "      " + str(nonCompliantBarcode) + " reads with noncompliant barcdes. (Contains Ns, etc)."
+            printUpdate(options.logFile,statusUpdate)
+            statusUpdate = "      " + str(poorQualityBarcode) + " reads with quality scores less than " + str(options.minQual) + "."
+            printUpdate(options.logFile,statusUpdate)
+
+            
             statusUpdate = "    " + str(NbarcodeFound) + " reads with compliant barcodes"
             printUpdate(options.logFile,statusUpdate)
 

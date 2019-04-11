@@ -243,7 +243,7 @@ python RBseq_Count_Barcodes.py -m metadatafile [-l logfile --matchBefore 6 --mat
     Number of bases before the barcode to match. Default is 6
 
   -a/--matchAfter
-    Number of bases to match after the barcode. Default is 6.  Note that in some cases this search region may be approaching the end of 50bp BarSeq reads.  If matchAfter happens to span the end of the read, and thus there aren't as many bases to match as set here, but there are 3 or more bases to mach, as many bases are available up to the number specified will be matched.  If there aren't 3 or more bases to match, then the read will be discarded.
+    Number of bases to match after the barcode. Default is 6.  Note that in some cases this search region may be approaching the end of 50bp BarSeq reads.  If matchAfter happens to span the end of the read, and thus there aren't as many bases to match as set here, but there are 2 or more bases to mach, as many bases are available up to the number specified will be matched.  If there aren't 2 or more bases to match, then the read will be discarded.
 
 RBseq_Count_Barcodes.py Outputs
   
