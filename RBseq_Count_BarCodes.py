@@ -61,7 +61,7 @@ def main(argv):
 
     statusUpdate = 'RBseq_Count_BarCodes.py  Samuel Coradetti 2019.'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.5'
+    statusUpdate = 'Version 1.0.6'
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
@@ -372,10 +372,18 @@ def main(argv):
 
     statusUpdate = "Most abundant barcode: " + maxBarcode + " seen " + str(maxCounts) + " times."
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = "Number of reads that differ from this barcode by one base pair (likely sequencing errors):" + str(errorCounts)
-    printUpdate(options.logFile,statusUpdate)
-    statusUpdate = "Estimated error rate across BarSeq libraries: " + str(errorRate*100) + "%"
-    printUpdate(options.logFile,statusUpdate)
+
+    if maxCounts > 10000:
+        statusUpdate = "Number of reads that differ from this barcode by one base pair (likely sequencing errors):" + str(errorCounts)
+        printUpdate(options.logFile,statusUpdate)
+        statusUpdate = "Estimated sequencing error rate for barcodes: " + str(errorRate*100) + "%"
+        printUpdate(options.logFile,statusUpdate)
+
+    else:
+        statusUpdate = "Not enough reads for most common barcode to estimate sequencing error rate in barcodes. Assuming 1%."
+        printUpdate(options.logFile,statusUpdate)
+        erroRate = 0.01
+        
 
     bins = range(1,maxCounts+2)
     countHistogram, division = np.histogram(totalCounts, bins = bins)
