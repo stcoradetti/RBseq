@@ -61,7 +61,7 @@ def main(argv):
 
     statusUpdate = 'RBseq_Count_BarCodes.py  Samuel Coradetti 2019.'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.7'
+    statusUpdate = 'Version 1.0.6'
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
@@ -83,7 +83,7 @@ def main(argv):
         sys.exit()
     try:
         with open(fileToOpen, 'rb') as FileHandle:
-            metaFrame = pd.read_csv(FileHandle,sep='\t')
+            metaFrame = pd.read_table(FileHandle)
             metaFrame = metaFrame[metaFrame[metaFrame.columns[0]].notna()]
             FileHandle.close()
     except IOError:
@@ -203,7 +203,7 @@ def main(argv):
                     readName=""
                     readCount=0
                     readSeq=""
-                    readQual=""
+                    readQuql=""
                     NbarcodeFound = 0
                     NbarcodeNotFound = 0
                     lowQualScores = {}
@@ -421,7 +421,7 @@ def main(argv):
 
     try:
         with open(poolFileName, 'rb') as poolFileHandle:
-            poolFrame = pd.read_csv(poolFileHandle,low_memory=False,dtype={'NearestGene':str,'CodingFraction':str},sep='\t')
+            poolFrame = pd.read_table(poolFileHandle,low_memory=False,dtype={'NearestGene':str,'CodingFraction':str})
             poolFileHandle.close()
             poolFrame.dropna(how='all')
             statusUpdate =  "Read "+ str(len(poolFrame)) + " barcodes from "+poolFileName

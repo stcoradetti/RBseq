@@ -44,7 +44,7 @@ def main(argv):
 
     statusUpdate = 'RBseq_Annotate_Insertions.py  Samuel Coradetti 2019.'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.7'
+    statusUpdate = 'Version 1.0.4'
     printUpdate(options.logFile,statusUpdate)
     
     optionDict = options.__dict__
@@ -66,7 +66,7 @@ def main(argv):
         sys.exit()
     try:
         with open(fileToOpen, 'rb') as FileHandle:
-            metaFrame = pd.read_csv(FileHandle,low_memory=False,sep='\t')
+            metaFrame = pd.read_table(FileHandle,low_memory=False)
             metaFrame = metaFrame[metaFrame[metaFrame.columns[0]].notna()]
             FileHandle.close()
     except IOError:
@@ -132,7 +132,7 @@ def main(argv):
         #Load pool information
         try:
             with open(poolFileName, 'rb') as poolFileHandle:
-                poolFrame = pd.read_csv(poolFileHandle,sep='\t')
+                poolFrame = pd.read_table(poolFileHandle)
                 poolFileHandle.close()
                 poolFrame.dropna(how='all')
                 statusUpdate =  "Read "+ str(len(poolFrame)) + " barcodes from "+poolFileName
@@ -145,7 +145,7 @@ def main(argv):
         #Load gene annotations
         try:
             with open(annotationFile, 'rb') as FileHandle:
-                annotFrame = pd.read_csv(FileHandle,sep='\t')
+                annotFrame = pd.read_table(FileHandle)
                 annotFrame = annotFrame[annotFrame[annotFrame.columns[0]].notna()]
                 FileHandle.close()
                 statusUpdate = "Read "+str(len(annotFrame))+" annotations from "+annotationFile

@@ -109,7 +109,7 @@ def main(argv):
 
     statusUpdate = 'RBseq_Map_Insertions.py  Samuel Coradetti 2019.'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.7'
+    statusUpdate = 'Version 1.0.4'
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
@@ -131,7 +131,7 @@ def main(argv):
         sys.exit()
     try:
         with open(fileToOpen, 'r') as FileHandle:
-            metaFrame = pd.read_csv(FileHandle,low_memory=False,sep='\t')
+            metaFrame = pd.read_table(FileHandle,low_memory=False)
             metaFrame = metaFrame[~metaFrame[metaFrame.columns[0]].isnull()]
             FileHandle.close()
     except IOError:
@@ -255,7 +255,7 @@ def main(argv):
                     readName=""
                     readCount=0
                     readSeq=""
-                    readQual=""
+                    readQuql=""
                     NbarcodeFound = 0
                     NbarcodeNotFound = 0
                     lowQualScores = {}

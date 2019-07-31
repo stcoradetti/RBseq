@@ -28,16 +28,15 @@ def main(argv):
     parser.add_argument("-g", "--minGeneCounts", dest="minGeneCounts", help="Integer. Minimum total counts across all insertions in a given gene before gene fitness scores are calculated. Default is 20", default=20, type=int)
     parser.add_argument("-I", "--minInsertions", dest="minInsertions", help="Integer. Minimum number of insertions with sufficient counts in a given gene before gene fitness scores are calculated. Default is 3", default=3, type=int)
     parser.add_argument("-W", "--maxWeightCounts", dest="maxWeightCounts", help="Integer. Maximum number of counts to be used for gene fitness score calculation.  E.g. if set at 50 then two insertions with 50 and 100 counts would be weighted equally in computing gene fitness, but an insertion with 10 counts would have a smaller weight ", default=50, type=int)
-    parser.add_argument("-P", "--noPseudoCounts", dest="smartPseudoCounts", action='store_false', help="If this flag is passed, fitness scores will NOT be computed with 'smart' pseudocounts as in Wetmore et al 2015.", default=True)
+    parser.add_argument("-P", "--noPseudoCounts", dest="smartPseudoCounts", action='store_false', help="If this flag is passed, fitness scores will NOT be computed without 'smart' pseudocounts as in Wetmore et al 2015.", default=True)
     parser.add_argument("-B", "--fitnessBrowserOutput", dest="fitnessBrowserOutput", action='store_true', help="If this flag is passed, output files will be saved in formats compatible with the Arkin Lab Fitness Browser", default=False)
-    parser.add_argument("-C", "--centerOnMedian", dest="centerOnMedian", action='store_true', help="By default strain fitness scores are noramlized to a mean of zero in a given sample.  If this flag is passed they will be normalized to the median", default=True)
 
     options = parser.parse_args()
 
 
     statusUpdate = 'RBseq_Calculate_Fitness.py  Samuel Coradetti 2019.'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.7'
+    statusUpdate = 'Version 1.0.4'
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
@@ -59,7 +58,7 @@ def main(argv):
         sys.exit()
     try:
         with open(fileToOpen, 'rb') as FileHandle:
-            metaFrame = pd.read_csv(FileHandle,low_memory=False,sep='\t')
+            metaFrame = pd.read_table(FileHandle,low_memory=False)
             metaFrame = metaFrame[~metaFrame[metaFrame.columns[0]].isnull()]
             FileHandle.close()
     except IOError:
@@ -122,7 +121,7 @@ def main(argv):
     fileToOpen = poolCountFiles[0]
     try:
         with open(fileToOpen, 'rb') as FileHandle:
-            poolCounts = pd.read_csv(fileToOpen, low_memory=False, dtype={'NearestGene':str},sep='\t')
+            poolCounts = pd.read_table(fileToOpen, low_memory=False, dtype={'NearestGene':str})
             FileHandle.close()
     except IOError:
         statusUpdate = " Could not read file:"+fileToOpen+" ...exiting."
@@ -252,24 +251,29 @@ def main(argv):
     analyzedSamples = list(sampleNames)
     analyzedSamples.extend(list(references))
     analyzedSamples = list(set(analyzedSamples))
-
     medianCounts = poolCounts[analyzedSamples].sum().median()
     normFactors = 100000000/poolCounts[analyzedSamples].sum()
     poolCountsNotNormalized = poolCounts.copy()
     poolCounts[analyzedSamples] = poolCounts[analyzedSamples] * normFactors
     
-    #calculate intial strain fitness. 
+    #calculate strain fitness. 
     comparisons = []
     for sampNum,sampleName in enumerate(sampleNames):
         comparisonText = sampleName + "_vs_" + references[sampNum]
         comparisons.append(comparisonText)
-        #Replace zero counts with 0.1 to prevent infinite results
+        #Replace zero counts with 1 to prevent infinite results
         strainFit[sampNum] = np.log2((poolCounts[sampleName] + 0.1) / (poolCounts[references[sampNum]] + 0.1))
-        if options.centerOnMedian:
-            strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum].median()
-        else:
-            strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum].mean()
 
+    #Option to normalize strain fitness over local gene neighborhood
+    if options.normLocal > 0:
+        statusUpdate = 'Normalizing over rolling window'
+        printUpdate(options.logFile,statusUpdate)
+        window = options.normLocal
+        for sampNum in sampleNumbers:
+            rollingMean = []
+            for scaffold,scaffoldGroup in strainFit.groupby('scaffold'):
+                rollingMean.extend(scaffoldGroup[sampNum].rolling(window,center=True).median().fillna(method='ffill').fillna(method='bfill').values)
+            strainFit[sampNum] = strainFit[sampNum] - rollingMean
 
     statusUpdate = 'Calculating gene fitness'
     printUpdate(options.logFile,statusUpdate)
@@ -298,7 +302,7 @@ def main(argv):
     geneFit1 = weightedFit1.groupby('NearestGene')[sampleNumbers].sum()
     geneFit2 = weightedFit2.groupby('NearestGene')[sampleNumbers].sum()
 
-    #Compute 'smart' pseudocounts a la Wetmore 2015.
+    #Compute 'smart' pseudocounts a la Wetmore 2015.  Seems like it actually increases variance between replicates?
     #Need sample counts and reference counts for later even if not using pseudocounts
     for sampNum,sampleName in enumerate(sampleNames):
             sampleCounts[sampNum] = includeMask[sampNum].astype('int').values*poolCounts[sampleName]
@@ -314,33 +318,13 @@ def main(argv):
         
         for sampNum,sampleName in enumerate(sampleNames):
             strainFit[sampNum] = np.log2((poolCounts[sampleName] + pseudoCounts[sampNum]**0.5) / (poolCounts[references[sampNum]] + pseudoCounts[sampNum]**-0.5))
-            if options.centerOnMedian:
-                strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum].median()
-            else:
-                strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum].mean()
-
-    #Option to normalize strain fitness over local neighborhood
-    if options.normLocal > 0:
-        statusUpdate = 'Normalizing over rolling window'
-        printUpdate(options.logFile,statusUpdate)
-        window = options.normLocal
-        for sampNum in sampleNumbers:
-            rollingMean = []
-            for scaffold,scaffoldGroup in strainFit.groupby('scaffold'):
-                if options.centerOnMedian:
-                    rollingMean.extend(scaffoldGroup[sampNum].rolling(window,center=True).median().fillna(method='ffill').fillna(method='bfill').values)
-                else:
-                    rollingMean.extend(scaffoldGroup[sampNum].rolling(window,center=True).mean().fillna(method='ffill').fillna(method='bfill').values)
-            strainFit[sampNum] = strainFit[sampNum] - rollingMean
-
-    
-    #Recalculate gene fitness based on adjusted strain fitness        
-    weightedFit[sampleNumbers] = strainFit[sampleNumbers] * weights[sampleNumbers]
-    weightedFit1[sampleNumbers] = strainFit[sampleNumbers] * weights1[sampleNumbers]
-    weightedFit2[sampleNumbers] = strainFit[sampleNumbers] * weights2[sampleNumbers]
-    geneFit = weightedFit.groupby('NearestGene')[sampleNumbers].sum()
-    geneFit1 = weightedFit1.groupby('NearestGene')[sampleNumbers].sum()
-    geneFit2 = weightedFit2.groupby('NearestGene')[sampleNumbers].sum()
+            
+        weightedFit[sampleNumbers] = strainFit[sampleNumbers] * weights[sampleNumbers]
+        weightedFit1[sampleNumbers] = strainFit[sampleNumbers] * weights1[sampleNumbers]
+        weightedFit2[sampleNumbers] = strainFit[sampleNumbers] * weights2[sampleNumbers]
+        geneFit = weightedFit.groupby('NearestGene')[sampleNumbers].sum()
+        geneFit1 = weightedFit1.groupby('NearestGene')[sampleNumbers].sum()
+        geneFit2 = weightedFit2.groupby('NearestGene')[sampleNumbers].sum()
 
     #filter
     geneWeights = weights.groupby('NearestGene')[sampleNumbers].sum()
