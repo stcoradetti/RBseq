@@ -30,14 +30,14 @@ def main(argv):
     parser.add_argument("-W", "--maxWeightCounts", dest="maxWeightCounts", help="Integer. Maximum number of counts to be used for gene fitness score calculation.  E.g. if set at 50 then two insertions with 50 and 100 counts would be weighted equally in computing gene fitness, but an insertion with 10 counts would have a smaller weight ", default=50, type=int)
     parser.add_argument("-P", "--noPseudoCounts", dest="smartPseudoCounts", action='store_false', help="If this flag is passed, fitness scores will NOT be computed with 'smart' pseudocounts as in Wetmore et al 2015.", default=True)
     parser.add_argument("-B", "--fitnessBrowserOutput", dest="fitnessBrowserOutput", action='store_true', help="If this flag is passed, output files will be saved in formats compatible with the Arkin Lab Fitness Browser", default=False)
-    parser.add_argument("-C", "--centerOnMedian", dest="centerOnMedian", action='store_true', help="By default strain fitness scores are noramlized to a mean of zero in a given sample.  If this flag is passed they will be normalized to the median", default=True)
+    parser.add_argument("-C", "--centerOnMedian", dest="centerOnMedian", action='store_true', help="By default strain fitness scores are noramlized to a mean of zero in a given sample.  If this flag is passed they will be normalized to the median", default=False)
 
     options = parser.parse_args()
 
 
     statusUpdate = 'RBseq_Calculate_Fitness.py  Samuel Coradetti 2019.'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.7'
+    statusUpdate = 'Version 1.0.8'
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
