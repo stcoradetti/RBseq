@@ -14,6 +14,10 @@ from matplotlib.backends.backend_pdf import PdfPages
 from scipy import stats
 import statsmodels.stats.multitest as smm
 
+Version = '1.1.0'
+ReleaseDate = 'Jan 8, 2020'
+
+
 pd.set_option('display.max_columns', 500)
     
 def main(argv):
@@ -35,9 +39,11 @@ def main(argv):
     options = parser.parse_args()
 
 
-    statusUpdate = 'RBseq_Calculate_Fitness.py  Samuel Coradetti 2019.'
+    statusUpdate = 'RBseq_Calculate_Fitness.py'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.8'
+    statusUpdate = 'Version: ' + Version
+    printUpdate(options.logFile,statusUpdate)
+    statusUpdate = 'Release Date: ' + ReleaseDate
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
@@ -128,6 +134,8 @@ def main(argv):
         statusUpdate = " Could not read file:"+fileToOpen+" ...exiting."
         printUpdate(options.logFile,statusUpdate)
         sys.exit()
+
+    poolCounts['CodingFraction'] = poolCounts['CodingFraction'].fillna(0)
 
     #extract approximate gene positions from poolcount file
     geneInfo = poolCounts[['NearestGene','scaffold','pos']]

@@ -10,6 +10,10 @@ import re
 from Bio.Blast.Applications import NcbiblastnCommandline
 import os
 
+Version = '1.1.0'
+ReleaseDate = 'Jan 8, 2020'
+
+
 #http://code.activestate.com/recipes/576874-levenshtein-distance/
 def levenshtein(s1, s2):
     l1 = len(s1)
@@ -107,9 +111,11 @@ def main(argv):
 
     options = parser.parse_args()
 
-    statusUpdate = 'RBseq_Map_Insertions.py  Samuel Coradetti 2019.'
+    statusUpdate = 'RBseq_Map_Insertions.py'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.8'
+    statusUpdate = 'Version: ' + Version
+    printUpdate(options.logFile,statusUpdate)
+    statusUpdate = 'Release Date: ' + ReleaseDate
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__

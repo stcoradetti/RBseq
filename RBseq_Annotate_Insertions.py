@@ -16,6 +16,9 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import argparse
 
+Version = '1.1.0'
+ReleaseDate = 'Jan 8, 2020'
+
 
 plt.style.use('seaborn-colorblind')
 plt.rcParams['font.family'] = 'sans-serif'
@@ -42,9 +45,11 @@ def main(argv):
 
     options  = parser.parse_args()
 
-    statusUpdate = 'RBseq_Annotate_Insertions.py  Samuel Coradetti 2019.'
+    statusUpdate = 'RBseq_Annotate_Insertions.py'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.8'
+    statusUpdate = 'Version: ' + Version
+    printUpdate(options.logFile,statusUpdate)
+    statusUpdate = 'Release Date: ' + ReleaseDate
     printUpdate(options.logFile,statusUpdate)
     
     optionDict = options.__dict__

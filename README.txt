@@ -199,6 +199,9 @@ python RBseq_Count_Barcodes.py -m metadatafile [-l logfile --matchBefore 6 --mat
   -m/--metafile METAFILE
     Metadata file for BarSeq runs. Contains the following columns:
 
+      FileIndex
+      An unique integer for each fastq file to be processed. Used to store intermediate files listing counts for all complaint barcodes found in a given fastq file. Note these are counts for all possible barcodes seen in the sequence, not only those found in the mapped insertion pool reference file.
+
       Fastq
       Full or relative path to barseq fastq files.
 
@@ -245,15 +248,21 @@ python RBseq_Count_Barcodes.py -m metadatafile [-l logfile --matchBefore 6 --mat
   -a/--matchAfter
     Number of bases to match after the barcode. Default is 6.  Note that in some cases this search region may be approaching the end of 50bp BarSeq reads.  If matchAfter happens to span the end of the read, and thus there aren't as many bases to match as set here, but there are 2 or more bases to mach, as many bases are available up to the number specified will be matched.  If there aren't 2 or more bases to match, then the read will be discarded.
 
+  -Q/--quietMode
+    If this flag is passed the script will run in 'quiet mode' and give fewer details from each fastq on the command line and in the log file.  All the same statistics will still be reported in fastqSummaryStats.txt
+
 RBseq_Count_Barcodes.py Outputs
   
-  RBseq_Count_Barcodes.py will summarize the number of barcodes seen for each sample, and use the most abundant barcode to estimate overall error rate.  It will also offer an extremely approximate guess at to the real diversity of barcodes present in the physical sample using the formula postulated by (Chao 1987): N seen once squared divided by two times N seen twice.  This number is at best a guess within a few orders of magnitude in this context and is really just confirmation that there is likely a large diverse population of unique barcodes in your sample or there isn't.
+  RBseq_Count_Barcodes.py will summarize the number of barcodes seen for each fastqfile, and use the most abundant barcode to estimate overall error rate (the percent of reads with sequence errors in the barcode).  It reports the number barcodes seen once, twice or three times or more in the fastq file, as well as an an extremely approximate guess at to the real diversity of barcodes present in the physical sample using the formula postulated by (Chao 1987): N seen once squared divided by two times N seen twice.  The Chao estimate can be useful when read depth is limiting and the vast majority of one or two count barcodes are real.  At higher read depths the one and two count barcodes are more inflated with sequencing errors and the number of barcodes with three or more counts is probably a better indicator of the actual population size.
 
   poolCount.txt
-    Tab-delimited file with uniquely mapped barcodes in the insertion pool, some information about their location and genomic context, and the number of times each was seen in each sample.
+    Tab-delimited file with uniquely mapped barcodes in the insertion pool, some information about their location and genomic context, and the number of times each was seen in each sample.  Note that for a given biological sample multiple different fastq files can be loaded into this script representing different technical replicates, repeated sequence runs, etc, but in the final output, counts for each sample (indicated by the SampleName field in the metafile) will be aggregated across all input fastqs. 
 
   countsFiles
-    A directory of files with raw barcode counts seen in each sample.  These include barcodes not in the mapped mutant pool. These files can be used to repeat counts with an updated poolfile without the time consuming step of finding and counting barcodes in all reads.
+    A directory of files with raw barcode counts seen in each fastq file.  These include barcodes not in the mapped mutant pool. These files can be used to repeat counts with an updated poolfile without the time consuming step of finding and counting barcodes in all reads.
+
+  fastqSummaryStats.txt
+    A tab-delimited file summarizing some statistics on barcodes seen in each sequence file.  These are the same stats reported on the command line (total reads, reads with barcodes, etc).  Note that for any files with UsePrecounted = TRUE in the metafile some of these statistics won't be reported as any information on reads without complaint barcodes are not saved in the intermediate .counts files.
 
 --
 RBseq_Calculate_Fitness.py Inputs

@@ -7,12 +7,15 @@ import pandas as pd
 from datetime import datetime
 import re
 import os
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
+#import matplotlib
+#matplotlib.use('agg')
+#import matplotlib.pyplot as plt
+#from matplotlib.backends.backend_pdf import PdfPages
 import json
-from collections import Counter
+import timeit
+
+Version = '1.1.0'
+ReleaseDate = 'Jan 8, 2020'
 
 
 def OffByOneList(seq):
@@ -57,11 +60,14 @@ def main(argv):
     parser.add_argument("-q", "--qual", dest="minQual", help="Minimum quality score for the barcode region for a read to counted. Default is 10",default=10, type=int)
     parser.add_argument("-b", "--matchBefore", dest="matchBefore", help="Number of bases before the barcode to match. Default is 6", default=6, type=int)
     parser.add_argument("-a", "--matchAfter", dest="matchAfter", help="Number of bases after the barcode to match. Default is 6", default=6, type=int)
+    parser.add_argument("-Q", "--quietMode", action='store_true', dest="quietMode", help="Give fewer details about barcodes found during the run and in the log file.  Summary stats will still be reported in summaryStats.txt", default=False)
     options = parser.parse_args()
 
-    statusUpdate = 'RBseq_Count_BarCodes.py  Samuel Coradetti 2019.'
+    statusUpdate = 'RBseq_Count_BarCodes.py'
     printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Version 1.0.8'
+    statusUpdate = 'Version: ' + Version
+    printUpdate(options.logFile,statusUpdate)
+    statusUpdate = 'Release Date: ' + ReleaseDate
     printUpdate(options.logFile,statusUpdate)
 
     optionDict = options.__dict__
@@ -69,11 +75,12 @@ def main(argv):
     for option in optionDict:
         statusUpdate+=" "+option+":"+str(optionDict[option])+" "
     printUpdate(options.logFile,statusUpdate)
-    
-    statusUpdate = 'Logging status updates in '+options.logFile
-    printUpdate(options.logFile,statusUpdate)
-    statusUpdate = 'Loading TnSeq library metadata from '+options.metafile
-    printUpdate(options.logFile,statusUpdate)
+
+    if (not options.quietMode):
+        statusUpdate = 'Logging status updates in '+options.logFile
+        printUpdate(options.logFile,statusUpdate)
+        statusUpdate = 'Loading TnSeq library metadata from '+options.metafile
+        printUpdate(options.logFile,statusUpdate)
      
     #Load up experiment metadata
     fileToOpen = options.metafile
@@ -84,14 +91,16 @@ def main(argv):
     try:
         with open(fileToOpen, 'rb') as FileHandle:
             metaFrame = pd.read_csv(FileHandle,sep='\t')
-            metaFrame = metaFrame[metaFrame[metaFrame.columns[0]].notna()]
             FileHandle.close()
+            metaFrame = metaFrame[metaFrame[metaFrame.columns[0]].notna()]
+            metaFrame = metaFrame.fillna("NO INPUT")
+            
     except IOError:
         statusUpdate = "Could not read file:"+fileToOpen+" ...exiting."
         printUpdate(options.logFile,statusUpdate)
         sys.exit()
     
-    requiredColumns=['Fastq','SampleName','UsePrecounted','Poolfile','OutputDir','minRandom','maxRandom','DualIndex','BeforeBarcode','BarcodeLengths','AfterBarcode']
+    requiredColumns=['FileIndex','Fastq','SampleName','UsePrecounted','Poolfile','OutputDir','minRandom','maxRandom','DualIndex','BeforeBarcode','BarcodeLengths','AfterBarcode']
     for requiredColumn in requiredColumns:
         if requiredColumn not in metaFrame.columns:
             statusUpdate = "Metadata file is missing column "+requiredColumn+" ...exiting."
@@ -99,82 +108,110 @@ def main(argv):
             sys.exit()
 
     #Get a list of fastqs and matching model files from the metadata
-    fastqFiles=metaFrame['Fastq'].values
-    useCounted=metaFrame['UsePrecounted'].values
-    outputDirs=metaFrame['OutputDir'].values
-    sampleNames=metaFrame['SampleName'].values
-    poolNames=metaFrame['Poolfile'].values
-    minRandoms=metaFrame['minRandom'].values
-    DualIndexes=metaFrame['DualIndex'].values
-    BeforeBarcodes=metaFrame['BeforeBarcode'].values
-    BarcodeLenths=metaFrame['BarcodeLengths'].values
-    AfterBarcodes=metaFrame['AfterBarcode'].values
-    maxRandoms=metaFrame['maxRandom'].values
+    fileIndexes=metaFrame['FileIndex'].values
+    metaFrame = metaFrame.set_index('FileIndex')
+    
 
-    for outputN,dir in enumerate(outputDirs):
-        if not dir[-1] == "/":
-            outputDirs[outputN] = dir+"/"
-        if not os.path.exists(outputDirs[outputN]):
-            os.makedirs(outputDirs[outputN])
-        if not os.path.exists(outputDirs[outputN]+"/countsFiles/"):
-            os.makedirs(outputDirs[outputN]+"/countsFiles/")
+    outputDir = metaFrame.loc[fileIndexes[0]]['OutputDir']
+    if (not options.quietMode):
+        statusUpdate = "Setting output directory as: " + outputDir + " (from first line of metadata file)"
+        printUpdate(options.logFile,statusUpdate)
+    
+    if not outputDir[-1] == "/":
+        outputDir = outputDir+"/"
+    if not os.path.exists(outputDir):
+        os.makedirs(outputDir)
+    if not os.path.exists(outputDir+"countsFiles/"):
+        os.makedirs(outputDir+"countsFiles/")
 
+    statList = ['FileIndex','TotalReads','BarcodeFoundReads','BarcodeInPoolfileReads','BarcodeNotFoundReads','NoDualIndexReads',
+                'NoPreSeqReads','NoPostSeqReads','NonCompliantBarcodeReads','PoorQualityBarcodeReads','TotalBarcodes','TotalBarcodesInPoolfile',
+                'MostAbundantBarcode','CountsForMostAbudantBarcode','ErrorRatePercent','OneRead','TwoReads','ThreeReadsOrMore','EstimatedPopulationSize']
+               
+        
+    sumStats = {}
+    for stat in statList:
+        sumStats[stat] = []
+        
 
-    #Loop through fastq files and map TnSeq reads to the genome
-    statusUpdate = 'Finding barcodes in fastqs and counting occurances'
-    printUpdate(options.logFile,statusUpdate)
+    poolFileName = str(metaFrame.loc[fileIndexes[0]]['Poolfile'])
+    if (not options.quietMode):
+        statusUpdate = "Loading mapped barcodes in mutant pool from: " + poolFileName + " (from first line of metadata file)"
+        printUpdate(options.logFile,statusUpdate)
+    poolFileFound = False
+    if not (poolFileName == "NO INPUT"):
+        try:
+            with open(poolFileName, 'rb') as poolFileHandle:
+                poolFrame = pd.read_csv(poolFileHandle,low_memory=False,dtype={'NearestGene':str,'CodingFraction':str},sep='\t')
+                poolFileHandle.close()
+                poolFrame.dropna(how='all')
+                statusUpdate =  "Read "+ str(len(poolFrame)) + " barcodes from "+poolFileName
+                printUpdate(options.logFile,statusUpdate)
+                poolFileFound = True
+        except IOError:
+            statusUpdate =  "Could not read file: "+poolFileName
+            printUpdate(options.logFile,statusUpdate)
+            sys.exit()
+  
+    if poolFileFound:
+        poolCounts = poolFrame[['rcbarcode','scaffold','pos','NearestGene','CodingFraction','LocalGCpercent','AlternateID','Annotation']].copy()
+        poolCounts = poolCounts.rename(index=str, columns={'rcbarcode':'barcode'})
+        poolCounts_byIndex = poolCounts.copy()
+    else:
+        statusUpdate =  "No valid poolfile found on the first line of metadata.  Barcodes will be extracted from sequence data, but no poolcounts file will be generated."
+        printUpdate(options.logFile,statusUpdate)
 
-    allCounts = {}
+    if (not options.quietMode):
+        statusUpdate = 'Finding barcodes in fastqs and counting occurances'
+        printUpdate(options.logFile,statusUpdate)
+        statusUpdate = "---------------------"
+        printUpdate(options.logFile,statusUpdate)
 
-
-    for fastqNum,fastqFile in enumerate(fastqFiles):
-        sampleName = sampleNames[fastqNum]
+    for fileIndex in fileIndexes:
+        sumStats['FileIndex'].append(fileIndex)
+        indexRow = metaFrame.loc[fileIndex]
         noPreSeq = 0
         noPostSeq = 0
         noDualIndex = 0
         nonCompliantBarcode = 0
         poorQualityBarcode = 0
-        if useCounted[fastqNum]:
-            statusUpdate = '  Loading previously counted reads for '+fastqFile
+        
+        barcodeCounts={}
+
+        if  indexRow['UsePrecounted']:
+            statusUpdate = '  Loading previously counted reads for '+ indexRow['OutputDir']
             printUpdate(options.logFile,statusUpdate)
-            fileToOpen = outputDirs[fastqNum]+"countsFiles/"+sampleName+'.counts'
+            fileToOpen = outputDir+"countsFiles/"+str(fileIndex)+'.counts'
             try:
                 with open(fileToOpen, 'r') as file:
-                    barcodesCountsLoad = Counter(json.load(file))
+                    barcodeCounts = json.load(file)
                     file.close()
             except IOError:
                 statusUpdate = " Could not read file:"+fileToOpen+" ...exiting."
                 printUpdate(options.logFile,statusUpdate)
+                sys.exit()
 
-
-
-            if sampleName in allCounts:
-                barcodeCounts = allCounts[sampleName] + barcodesCountsLoad
-            else:
-                barcodeCounts = Counter(barcodesCountsLoad)
+            for stat in ['TotalReads','BarcodeFoundReads','BarcodeNotFoundReads','NoDualIndexReads','NoPreSeqReads','NoPostSeqReads',
+                         'NonCompliantBarcodeReads','PoorQualityBarcodeReads']:
+                sumStats[stat].append(np.nan)
 
 
         else:
-            statusUpdate = '  Mapping reads from '+fastqFile
+            statusUpdate = '  Mapping reads from ' + indexRow['Fastq']
             printUpdate(options.logFile,statusUpdate)
 
-            #first check if this fastq is for a sample with counts already loaded from another sequence file
-            if sampleNames[fastqNum] in allCounts:
-                barcodeCounts = allCounts[sampleNames[fastqNum]]
-            else:
-                barcodeCounts=Counter({})
-
-            skipBases = minRandoms[fastqNum]
-            dualIndex = DualIndexes[fastqNum]
-
+            skipBases = indexRow['minRandom']
+            phasingBases = indexRow['maxRandom'] - skipBases
+            
+            dualIndex = indexRow['DualIndex']
             if not bool(re.match('^[AGCT]+$', str(dualIndex))):
                 dualIndex = ""
             else:
-                statusUpdate = "  Filtering reads on second index: "+str(dualIndex)
-                printUpdate(options.logFile,statusUpdate)
+                if (not options.quietMode):
+                    statusUpdate = "  Filtering reads on second index: "+str(dualIndex)
+                    printUpdate(options.logFile,statusUpdate)
 
-            beforeBarcode = BeforeBarcodes[fastqNum]
-            phasingBases = maxRandoms[fastqNum] - skipBases
+            beforeBarcode = indexRow['BeforeBarcode']
 
             if len(beforeBarcode) < options.matchBefore:
                 statusUpdate = " Metafile defines a shorter sequence before the barcode than required by --matchBefore... exiting"
@@ -189,15 +226,16 @@ def main(argv):
             offsetBefore = skipBases + len(dualIndex) + len(beforeBarcode) - len(searchBefore)
             offsetBarcode = skipBases + len(dualIndex) + len(beforeBarcode)
 
-            endSearch = AfterBarcodes[fastqNum][:options.matchAfter]
+            endSearch = indexRow['AfterBarcode'][:options.matchAfter]
             matchAfterWarning = 0
 
-            allowedLengths = [ int(x) for x in BarcodeLenths[fastqNum].split(",") ]
+            allowedLengths = [ int(x) for x in indexRow['BarcodeLengths'].split(",") ]
 
-            statusUpdate = "  Looking for sequence barcode preceeded by "+searchBefore
-            printUpdate(options.logFile,statusUpdate)
+            if (not options.quietMode):
+                statusUpdate = "  Looking for sequence barcode preceeded by "+searchBefore
+                printUpdate(options.logFile,statusUpdate)
 
-            fileToOpen = fastqFile
+            fileToOpen = indexRow['Fastq']
             try:
                 with open(fileToOpen, 'r') as FileHandle:
                     readName=""
@@ -280,178 +318,173 @@ def main(argv):
                 sys.exit()
 
 
+            sumStats['TotalReads'].append(NbarcodeNotFound + NbarcodeFound)
+            sumStats['BarcodeNotFoundReads'].append(NbarcodeNotFound)
+            sumStats['BarcodeFoundReads'].append(NbarcodeFound)
+            sumStats['NoDualIndexReads'].append(noDualIndex)
+            sumStats['NoPreSeqReads'].append(noPreSeq)
+            sumStats['NoPostSeqReads'].append(noPostSeq)
+            sumStats['NonCompliantBarcodeReads'].append(nonCompliantBarcode)
+            sumStats['PoorQualityBarcodeReads'].append(poorQualityBarcode)
+
+            statusUpdate = "    " + str(NbarcodeNotFound + NbarcodeFound) + " reads processed."
+            printUpdate(options.logFile,statusUpdate)
+
             if matchAfterWarning:
-                statusUpdate = "    Warning: " + str(matchAfterWarning) + " reads were too short to check " + str(options.matchAfter) + " bases after barcodes as specified with --matchAfter." 
-                printUpdate(options.logFile,statusUpdate)
-                statusUpdate = "      At least two bases following these barcodes matched the expected sequence." 
+                statusUpdate = "    " + str(matchAfterWarning) + " reads were too short to check " + str(options.matchAfter) + " bases after barcodes as specified with --matchAfter.  For these reads all remaining bases will be checked against the expected sequence. Reads with less than two remaining bases after the barcode will be counted as non-complaint." 
                 printUpdate(options.logFile,statusUpdate)
 
-
-            statusUpdate = "    " + str(NbarcodeNotFound) + " reads without recognizable, compliant barcodes."
+            statusUpdate = "    " + str(NbarcodeFound) + " reads with compliant barcodes."
             printUpdate(options.logFile,statusUpdate)
-            if noDualIndex:
-                statusUpdate = "      " + str(noDualIndex) + " reads without expected Dual Index."
+
+            if (not options.quietMode):
+                statusUpdate = "    " + str(NbarcodeNotFound) + " reads without recognizable, compliant barcodes. Of those:"
                 printUpdate(options.logFile,statusUpdate)
-            statusUpdate = "      " + str(noPreSeq) + " reads without expected sequence before the barcode region."
-            printUpdate(options.logFile,statusUpdate)
-            statusUpdate = "      " + str(noPostSeq) + " reads without expeced sequence after the barcode region."
-            printUpdate(options.logFile,statusUpdate)
-            statusUpdate = "      " + str(nonCompliantBarcode) + " reads with noncompliant barcdes. (Contains Ns, etc)."
-            printUpdate(options.logFile,statusUpdate)
-            statusUpdate = "      " + str(poorQualityBarcode) + " reads with quality scores less than " + str(options.minQual) + "."
-            printUpdate(options.logFile,statusUpdate)
+                if noDualIndex:
+                    statusUpdate = "      " + str(noDualIndex) + " reads without expected Dual Index."
+                    printUpdate(options.logFile,statusUpdate)
+                statusUpdate = "      " + str(noPreSeq) + " reads without expected sequence before the barcode region."
+                printUpdate(options.logFile,statusUpdate)
+                statusUpdate = "      " + str(noPostSeq) + " reads without expeced sequence after the barcode region."
+                printUpdate(options.logFile,statusUpdate)
+                statusUpdate = "      " + str(nonCompliantBarcode) + " reads with noncompliant barcdes. (Contains Ns, etc)."
+                printUpdate(options.logFile,statusUpdate)
+                statusUpdate = "      " + str(poorQualityBarcode) + " reads with quality scores less than " + str(options.minQual)
+                printUpdate(options.logFile,statusUpdate)
 
+            fileToSave = outputDir+"countsFiles/"+str(fileIndex)+'.counts'
+            if (not options.quietMode):
+                statusUpdate = "  Saving barcode counts to " + fileToSave
+                printUpdate(options.logFile,statusUpdate)
+
+            try:
+                with open(fileToSave, 'w') as file:
+                    file.write(json.dumps(barcodeCounts))
+            except IOError:
+                statusUpdate = " Could not read file:"+fileToSave+" ...exiting."
+                printUpdate(options.logFile,statusUpdate)
+
+        sumStats['TotalBarcodes'].append(len(barcodeCounts))
+        statusUpdate = "  Total barcodes seen (incudes sequencing errors): " + str(len(barcodeCounts))
+        printUpdate(options.logFile,statusUpdate)
+
+        if poolFileFound:
+            if (not options.quietMode):
+                statusUpdate = "  Matching barcodes to poolfile"
+                printUpdate(options.logFile,statusUpdate)
+
+            barcodeCountsFrame = pd.DataFrame.from_dict(barcodeCounts, orient='index',columns=[fileIndex],dtype=int)
+            poolCounts_byIndex[fileIndex] = barcodeCountsFrame.reindex(poolCounts_byIndex['barcode'],fill_value=0)[fileIndex].values
+
+            totalReadsInPool = poolCounts_byIndex[fileIndex].sum()
+            NbarcodesInPool = len(poolCounts_byIndex[poolCounts_byIndex[fileIndex] > 0])
+
+            statusUpdate = "    Number of barcodes from poolfile seen: " + str(NbarcodesInPool)
+            printUpdate(options.logFile,statusUpdate)
+            if (not options.quietMode):
+                statusUpdate = "    Reads with barcodes from poolfile: " + str(totalReadsInPool)
+                printUpdate(options.logFile,statusUpdate)
+
+            sumStats['TotalBarcodesInPoolfile'].append(NbarcodesInPool)
+            sumStats['BarcodeInPoolfileReads'].append(totalReadsInPool)
+        else:
+            sumStats['TotalBarcodesInPoolfile'].append(np.nan)
+            sumStats['BarcodeInPoolfileReads'].append(np.nan)
+
+        mostAbundantBarcode = barcodeCountsFrame[fileIndex].idxmax()
+        mostAbundantCounts = barcodeCountsFrame.loc[mostAbundantBarcode][fileIndex]
+
+        sumStats['MostAbundantBarcode'].append(mostAbundantBarcode)
+        sumStats['CountsForMostAbudantBarcode'].append(mostAbundantCounts)
+
+        if not options.quietMode:
+            statusUpdate = "  Most abundant barcode: " + mostAbundantBarcode + " seen " + str(mostAbundantCounts) + " times."
+            printUpdate(options.logFile,statusUpdate)
             
-            statusUpdate = "    " + str(NbarcodeFound) + " reads with compliant barcodes"
+
+        if mostAbundantCounts > 1000:
+            errorList = OffByOneList(mostAbundantBarcode)
+            errorsSeen = []
+            for barcode in errorList:
+                if barcode in  barcodeCountsFrame.index:
+                    errorsSeen.append(barcode)
+            errorCounts = barcodeCountsFrame.loc[errorsSeen][fileIndex].sum()
+            errorRate = max(.005,float(errorCounts)/(mostAbundantCounts+errorCounts))*100
+
+            if not options.quietMode:
+                statusUpdate = "  Number of reads that differ from this barcode by one base pair (likely sequencing errors):" + str(errorCounts)
+                printUpdate(options.logFile,statusUpdate)
+
+        else:
+            if not options.quietMode:
+                statusUpdate = "  Not enough reads for most common barcode to estimate sequencing error rate in barcodes. Assuming 1%."
+                printUpdate(options.logFile,statusUpdate)
+            errorRate = 1.0
+
+        sumStats['ErrorRatePercent'].append(errorRate)
+
+        ones = (barcodeCountsFrame[fileIndex] == 1).sum()
+        twos = (barcodeCountsFrame[fileIndex] == 2).sum()
+        threes = len(barcodeCountsFrame) - ones - twos
+
+        sumStats['OneRead'].append(ones)
+        sumStats['TwoReads'].append(twos)
+        sumStats['ThreeReadsOrMore'].append(threes)       
+
+        #Chao population size estimate, conservative
+        Nch = ones**2/(2*twos)
+
+        #Round to two significant figures
+        errorRate = round(errorRate, -(int(np.floor(np.log10(abs(errorRate)))))+1)
+        Nch = int(round(Nch, -(int(np.floor(np.log10(abs(Nch)))))+1))
+        sumStats['EstimatedPopulationSize'].append(Nch)
+
+        if (not options.quietMode):
+            statusUpdate = "  Estimated sequencing error rate for barcodes: " + str(errorRate) + "%"
+            printUpdate(options.logFile,statusUpdate)
+            statusUpdate = "  Barcodes seen once (highly inflated by sequencing errors): " + str(ones)
+            printUpdate(options.logFile,statusUpdate)
+            statusUpdate = "  Barcodes seen twice (slightly inflated by sequencing errors): " + str(twos)
+            printUpdate(options.logFile,statusUpdate)
+            statusUpdate = "  Barcodes seen three times or more: " + str(threes)
+            printUpdate(options.logFile,statusUpdate)
+            statusUpdate = "  Chao estimate of population size (ones^2/2*twos): " + str(Nch)
             printUpdate(options.logFile,statusUpdate)
 
-        allCounts[sampleNames[fastqNum]] = barcodeCounts
 
-    statusUpdate = "  Saving barcode counts to " + outputDirs[0]+"countsFiles/"
-    printUpdate(options.logFile,statusUpdate)
-
-    for sampleName in allCounts:
-        fileToOpen = outputDirs[fastqNum]+"countsFiles/"+sampleName+'.counts'
-        try:
-            with open(fileToOpen, 'w') as file:
-                file.write(json.dumps(allCounts[sampleName]))
-        except IOError:
-            statusUpdate = " Could not read file:"+fileToOpen+" ...exiting."
+        if (not options.quietMode):
+            statusUpdate = "---------------------"
             printUpdate(options.logFile,statusUpdate)
-
-    statusUpdate = "  Combining counts over all samples"
+            
+    sumStatFrame = pd.DataFrame.from_dict(sumStats)
+    fileToSave = outputDir+"fastqSummaryStats.txt"
+    statusUpdate = "Saving summary statistics for fastqs to: " + fileToSave
     printUpdate(options.logFile,statusUpdate)
+    sumStatFrame.to_csv(fileToSave,sep='\t',index=None)
+            
+    sampleGroups = metaFrame.groupby("SampleName")
+    sampleList = list(sampleGroups.groups.keys())
 
-    barcodeTotals = {}
-    for sample in allCounts:
-        for barcode in allCounts[sample]:
-            if barcode in barcodeTotals:
-                barcodeTotals[barcode] = barcodeTotals[barcode] + allCounts[sample][barcode]
-            else:
-                barcodeTotals[barcode] = allCounts[sample][barcode]
+    statusUpdate = "Processed " + str(len(fileIndexes)) + " sequence files corresponding to " + str(len(sampleList)) + " biological samples."
+    printUpdate(options.logFile,statusUpdate)
+            
+    if poolFileFound:
+        for SampleName,group in sampleGroups:
+            poolCounts[SampleName] = poolCounts_byIndex[group.index].sum(axis=1)
 
-    allBarcodes = list(barcodeTotals.keys())
+        totalCounts = poolCounts[sampleList].sum(axis=1)
+        nSeenInPool = totalCounts.astype(bool).sum()
+        nCounts = totalCounts.sum()
 
-    combinedCounts = pd.DataFrame(allBarcodes,columns=['barcode'])
-    for sample in allCounts:
-        sampleCounts = []
-        for barcode in allBarcodes:
-            if barcode in allCounts[sample]:
-                sampleCounts.append(allCounts[sample][barcode])
-            else:
-                sampleCounts.append(0)
-        combinedCounts[sample] = sampleCounts
+        statusUpdate = "Counted " + str(nCounts) + " total reads for " + str(nSeenInPool) + " mapped barcodes from the mutant pool."
+        printUpdate(options.logFile,statusUpdate)
 
+        fileToSave = outputDir+"poolCount.txt"
+        statusUpdate = "Saving poolcount file to: " + fileToSave
+        printUpdate(options.logFile,statusUpdate)
+        poolCounts.to_csv(fileToSave,sep='\t',index=None)
     
 
-    #estimate error rate in barcodes and number of true barcodes with one or two counts
- 
-    totalCounts = combinedCounts.sum(axis=1).values
-    combinedCounts['totalCounts'] = totalCounts
-    totalCountSum = np.sum(totalCounts)
-
-    statusUpdate = "Sequence Files processed: " + str(len(fastqFiles)) 
-    printUpdate(options.logFile,statusUpdate)
-    statusUpdate = "Total reads with compliant barcodes: " + str(totalCountSum)
-    printUpdate(options.logFile,statusUpdate)
-    statusUpdate = "Total barcodes seen (incudes sequencing errors): " + str(len(combinedCounts))
-    printUpdate(options.logFile,statusUpdate)
-
-
-    allBarcodes = combinedCounts['barcode'].values
-    maxIndex = np.argmax(totalCounts)
-    maxBarcode = allBarcodes[maxIndex]
-    maxCounts = totalCounts[maxIndex]
-
-    errorList = OffByOneList(maxBarcode)
-    errorCounts = 0
-    for index in range(0,len(totalCounts)):
-        if allBarcodes[index] in errorList:
-            errorCounts += totalCounts[index]
-    errorRate = max(.01,float(errorCounts)/(maxCounts+errorCounts))
-
-    statusUpdate = "Most abundant barcode: " + maxBarcode + " seen " + str(maxCounts) + " times."
-    printUpdate(options.logFile,statusUpdate)
-
-    if maxCounts > 10000:
-        statusUpdate = "Number of reads that differ from this barcode by one base pair (likely sequencing errors):" + str(errorCounts)
-        printUpdate(options.logFile,statusUpdate)
-        statusUpdate = "Estimated sequencing error rate for barcodes: " + str(errorRate*100) + "%"
-        printUpdate(options.logFile,statusUpdate)
-
-    else:
-        statusUpdate = "Not enough reads for most common barcode to estimate sequencing error rate in barcodes. Assuming 1%."
-        printUpdate(options.logFile,statusUpdate)
-        erroRate = 0.01
-        
-
-    bins = range(1,maxCounts+2)
-    countHistogram, division = np.histogram(totalCounts, bins = bins)
-    old_countHistogram = countHistogram.copy()
-
-    #For a barcode with given number of counts, remove expected number of erroneous counts from the barcode distribution, starting with most abundant barcodes
-    for counts in range(maxCounts,0,-1):
-        if countHistogram[counts-1] > 0:
-            lambdaCounts = counts*errorRate/60
-            if lambdaCounts >= 1:
-                nSeqErrBarcodes = 60 * countHistogram[counts-1]
-                SeqErrBarcodsCounts = np.random.poisson(lambdaCounts,nSeqErrBarcodes)
-                for ErrBarcodeCount in SeqErrBarcodsCounts:
-                    countHistogram[ErrBarcodeCount-1] -= 1
-            else:
-                countHistogram[0] -= int(countHistogram[counts-1] * errorRate)
-
-    twos = countHistogram[1]
-    ones = countHistogram[0]
-
-    #Chao population size estimate, conservative
-    Nch = ones**2/(2*twos)
-    Nch = 10**int(np.log10(Nch))
-
-    statusUpdate = "  Estimate of real barcodes seen once: " + str(ones)
-    printUpdate(options.logFile,statusUpdate)
-    statusUpdate = "  Estimate of real barcodes seen twice: " + str(twos)
-    printUpdate(options.logFile,statusUpdate)
-    statusUpdate = "  Chao estimate of true population size (VERY approximate): " + str(Nch)
-    printUpdate(options.logFile,statusUpdate)
-
-    poolFileName = poolNames[0]
-    statusUpdate = "Compiling counts for barcodes in " + poolFileName
-    printUpdate(options.logFile,statusUpdate)
-
-    try:
-        with open(poolFileName, 'rb') as poolFileHandle:
-            poolFrame = pd.read_csv(poolFileHandle,low_memory=False,dtype={'NearestGene':str,'CodingFraction':str},sep='\t')
-            poolFileHandle.close()
-            poolFrame.dropna(how='all')
-            statusUpdate =  "Read "+ str(len(poolFrame)) + " barcodes from "+poolFileName
-            printUpdate(options.logFile,statusUpdate)
-    except IOError:
-        statusUpdate =  "Could not read file: "+poolFileName
-        printUpdate(options.logFile,statusUpdate)
-        sys.exit()
-
-    poolCounts = poolFrame[['rcbarcode','scaffold','pos','NearestGene','CodingFraction','LocalGCpercent','AlternateID','Annotation']].copy()
-    poolCounts = poolCounts.rename(index=str, columns={'rcbarcode':'barcode'})
-    poolCounts = poolCounts.merge(combinedCounts,how='left',on='barcode').fillna(0)
-
-    for sample in sampleNames:
-        poolCounts[sample] = poolCounts[sample].astype(int)
-
-    totalCounts = poolCounts[sampleNames].sum(axis=1)
-
-    nSeenInPool = totalCounts.astype(bool).sum()
-    nCounts = totalCounts.sum()
-
-
-    statusUpdate = "Counted " + str(nCounts) + " reads across all BarSeq samples for " + str(nSeenInPool) + " mapped barcodes from the mutant pool."
-    printUpdate(options.logFile,statusUpdate)
-
-
-    poolCounts.to_csv(outputDirs[0]+'/poolCount.txt',sep="\t",index=False)
-
-    statusUpdate = "Wrote results to: " + outputDirs[0] + "poolCount.txt"
-    printUpdate(options.logFile,statusUpdate)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
