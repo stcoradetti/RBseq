@@ -1,5 +1,4 @@
 #!/usr/bin/python
-from __future__ import print_function
 import sys
 import argparse
 import numpy as np
@@ -8,14 +7,12 @@ from datetime import datetime
 import re
 import os
 import matplotlib
-matplotlib.use('agg')
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 from scipy import stats
 import statsmodels.stats.multitest as smm
 
-Version = '1.1.0'
-ReleaseDate = 'Jan 8, 2020'
+Version = '1.1.1'
+ReleaseDate = 'April 13, 2020'
 
 
 pd.set_option('display.max_columns', 500)
@@ -34,7 +31,7 @@ def main(argv):
     parser.add_argument("-W", "--maxWeightCounts", dest="maxWeightCounts", help="Integer. Maximum number of counts to be used for gene fitness score calculation.  E.g. if set at 50 then two insertions with 50 and 100 counts would be weighted equally in computing gene fitness, but an insertion with 10 counts would have a smaller weight ", default=50, type=int)
     parser.add_argument("-P", "--noPseudoCounts", dest="smartPseudoCounts", action='store_false', help="If this flag is passed, fitness scores will NOT be computed with 'smart' pseudocounts as in Wetmore et al 2015.", default=True)
     parser.add_argument("-B", "--fitnessBrowserOutput", dest="fitnessBrowserOutput", action='store_true', help="If this flag is passed, output files will be saved in formats compatible with the Arkin Lab Fitness Browser", default=False)
-    parser.add_argument("-C", "--centerOnMedian", dest="centerOnMedian", action='store_true', help="By default strain fitness scores are noramlized to a mean of zero in a given sample.  If this flag is passed they will be normalized to the median", default=False)
+    parser.add_argument("-C", "--centerOnMean", dest="centerOnMean", action='store_true', help="By default strain fitness scores are normalized to a median of zero in a given sample.  If this flag is passed they will be normalized to a mean of zero", default=False)
 
     options = parser.parse_args()
 
@@ -192,6 +189,7 @@ def main(argv):
     weightingFactors = totalCounts.copy()
     weightingFactors1 = totalCounts.copy()
     weightingFactors2 = totalCounts.copy()
+    normMask = totalCounts.copy()
 
     
     for sampNum,sampleName in enumerate(sampleNames):
@@ -200,6 +198,9 @@ def main(argv):
 
         #mask out insertions with low counts in each experiment
         eligibleCounts[sampNum] = np.ma.masked_inside(totalCounts[sampNum],0,options.minInsertionCounts).filled(0)
+        
+        #Only insertions with counts in both sample and reference libraries should be used for initial normalizaion
+        normMask[sampNum] = (np.ma.masked_inside(poolCounts[sampleNames[sampNum]],0,options.minInsertionCounts).filled(0) * np.ma.masked_inside(poolCounts[references[sampNum]],0,options.minInsertionCounts).filled(0)).astype('bool')
 
         #mask out insertions outside acceptable range in coding regions
         eligibleCounts[sampNum] = eligibleCounts[sampNum] * centralCodingMask.astype('int')
@@ -216,7 +217,6 @@ def main(argv):
     #maximum weights for any strain is that of a strain with maximumWeightCounts (e.g. 20) in both sample and reference condition
     maxWeight = (np.log(2)**2) / (1.0 / (1 + options.maxWeightCounts) + 1.0 / (1 + options.maxWeightCounts))
     weightingFactors[sampleNumbers] = np.ma.masked_outside(weightingFactors[sampleNumbers],0,maxWeight).filled(maxWeight)
-    
 
     #mask out insertions in genes without sufficient total counts per gene
     #for comparing 1st and 2nd half of genes, both halves must meet minimum counts per gene requirement
@@ -273,10 +273,10 @@ def main(argv):
         comparisons.append(comparisonText)
         #Replace zero counts with 0.1 to prevent infinite results
         strainFit[sampNum] = np.log2((poolCounts[sampleName] + 0.1) / (poolCounts[references[sampNum]] + 0.1))
-        if options.centerOnMedian:
-            strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum].median()
+        if options.centerOnMean:
+            strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum][normMask[sampNum]].mean()
         else:
-            strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum].mean()
+            strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum][normMask[sampNum]].median()
 
 
     statusUpdate = 'Calculating gene fitness'
@@ -320,12 +320,14 @@ def main(argv):
         pseudoCounts = pseudoCounts.merge(pseudoCountsByGene, on='NearestGene').fillna(0.1)
         pseudoCounts[sampleNumbers] = pseudoCounts[sampleNumbers].replace(0.0, 0.1)
         
+        geneFit[sampleNumbers] = geneFit[sampleNumbers].replace(0.0, np.nan)
+        
         for sampNum,sampleName in enumerate(sampleNames):
             strainFit[sampNum] = np.log2((poolCounts[sampleName] + pseudoCounts[sampNum]**0.5) / (poolCounts[references[sampNum]] + pseudoCounts[sampNum]**-0.5))
-            if options.centerOnMedian:
-                strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum].median()
+            if options.centerOnMean:
+                strainFit[sampNum] = strainFit[sampNum] - geneFit[sampNum].mean()
             else:
-                strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum].mean()
+                strainFit[sampNum] = strainFit[sampNum] - geneFit[sampNum].median()
 
     #Option to normalize strain fitness over local neighborhood
     if options.normLocal > 0:
@@ -335,10 +337,10 @@ def main(argv):
         for sampNum in sampleNumbers:
             rollingMean = []
             for scaffold,scaffoldGroup in strainFit.groupby('scaffold'):
-                if options.centerOnMedian:
-                    rollingMean.extend(scaffoldGroup[sampNum].rolling(window,center=True).median().fillna(method='ffill').fillna(method='bfill').values)
-                else:
+                if options.centerOnMean:
                     rollingMean.extend(scaffoldGroup[sampNum].rolling(window,center=True).mean().fillna(method='ffill').fillna(method='bfill').values)
+                else:
+                    rollingMean.extend(scaffoldGroup[sampNum].rolling(window,center=True).median().fillna(method='ffill').fillna(method='bfill').values)
             strainFit[sampNum] = strainFit[sampNum] - rollingMean
 
     
@@ -350,10 +352,11 @@ def main(argv):
     geneFit1 = weightedFit1.groupby('NearestGene')[sampleNumbers].sum()
     geneFit2 = weightedFit2.groupby('NearestGene')[sampleNumbers].sum()
 
-    #filter
+    #Filter out genes with no wieghted counts
     geneWeights = weights.groupby('NearestGene')[sampleNumbers].sum()
     geneWeightNonZero = (geneWeights[sampleNumbers] != 0).astype('int').replace(0.0, np.nan)
     geneFit[sampleNumbers] = geneFit[sampleNumbers]*geneWeightNonZero
+    
 
     uniqGeneAnnotations = poolCounts[['NearestGene','AlternateID','Annotation']].copy().drop_duplicates()
     uniqGeneAnnotations = uniqGeneAnnotations.set_index('NearestGene')
@@ -374,6 +377,10 @@ def main(argv):
     statusUpdate = 'Saving strain fitness scores used in fitness calculations in ' + outputDirs[0]+'strainFitUsed.txt'
     printUpdate(options.logFile,statusUpdate)
     strainFitUsed.to_csv(outputDirs[0]+'strainFitUsed.txt',sep="\t",index=False,header=headerText)
+    
+    statusUpdate = 'Saving weights used in gene fitness calculations in ' + outputDirs[0]+'strainWeights.txt'
+    printUpdate(options.logFile,statusUpdate)
+    weights.to_csv(outputDirs[0]+'strainWeights.txt',sep="\t",index=False,header=headerText)
     
     statusUpdate = 'Saving gene fitness scores in ' + outputDirs[0]+'geneFit_individual_replicates.txt'
     printUpdate(options.logFile,statusUpdate)
@@ -482,7 +489,6 @@ def main(argv):
     GCcor = []
     for replicateGroup in groupSet:
         #Generate plots of fitness in first and second half of the gene
-
         bothHalvesFilter = ((geneFitAverages1[replicateGroup] != 0) & (geneFitAverages2[replicateGroup] != 0))
         sigFilter01 = pVals[replicateGroup] < 0.05
         sigFilter001 = pVals[replicateGroup] < 0.001
@@ -491,8 +497,7 @@ def main(argv):
         sig1b = geneFitAverages1[bothHalvesFilter & sigFilter001]
         sig2b = geneFitAverages2[bothHalvesFilter & sigFilter001]
         
-        pp = PdfPages(outputDirs[0] + 'QCplots/' + replicateGroup + '_cor12.pdf')
-
+        #pp = PdfPages(outputDirs[0] + 'QCplots/' + replicateGroup + '_cor12.pdf')
         fig, ax = plt.subplots()
         fig.set_size_inches(6,6.6)
         ax.axhline(y=0, color='grey',linewidth=0.5,dashes=[1,1],zorder=-1)
@@ -509,18 +514,13 @@ def main(argv):
         legend = plt.legend(loc='upper left',edgecolor=None,frameon=False, fontsize=8)
         plt.xticks([-6,-4,-2,0,2],fontsize=8)
         plt.yticks([-6,-4,-2,0,2],fontsize=8)
-        plt.xlim(-8,3)
-        plt.ylim(-8,3)
         
         plt.gcf().subplots_adjust(bottom=0.12, left=0.12, right=0.98, top=0.91)
-
-        pp.savefig()
-        plt.clf()
+        plt.savefig(outputDirs[0] + 'QCplots/' + replicateGroup + '_cor12.pdf')
         plt.close()
-        pp.close()
+
 
         #Generate QQ plot of T-statistics vs normal distribution
-        pp = PdfPages(outputDirs[0] + 'QCplots/' + replicateGroup + '_qq.pdf')
         fig, ax = plt.subplots()
         fig.set_size_inches(6,6.6)
         
@@ -548,13 +548,11 @@ def main(argv):
         plt.xlabel('Standard Normal',fontsize=8,labelpad=1)
         plt.ylabel('T-statistic',fontsize=8,labelpad=1)
         plt.gcf().subplots_adjust(bottom=0.12, left=0.12, right=0.98, top=0.91)
-        pp.savefig()
-        plt.clf()
+        plt.savefig(outputDirs[0] + 'QCplots/' + replicateGroup + '_qq.pdf')
         plt.close()
-        pp.close()
+
 
         #Generate plot of fitness vs position on largest chcromosome
-        pp = PdfPages(outputDirs[0] + 'QCplots/' + replicateGroup + '_fit_v_position.pdf')
         fig, ax = plt.subplots()
         fig.set_size_inches(6,6.6)
 
@@ -592,14 +590,10 @@ def main(argv):
         plt.xlabel('Position on scaffold',fontsize=8,labelpad=1)
         plt.ylabel('Fitness',fontsize=8,labelpad=1)
         plt.gcf().subplots_adjust(bottom=0.12, left=0.12, right=0.98, top=0.91)
-        pp.savefig()
-        plt.clf()
+        plt.savefig(outputDirs[0] + 'QCplots/' + replicateGroup + '_fit_v_position.pdf')
         plt.close()
-        pp.close()
 
         #Generate plots of fitness versus GC content around insertions
-
-        pp = PdfPages(outputDirs[0] + 'QCplots/' + replicateGroup + '_GCcor.pdf')
         fig, ax = plt.subplots()
         fig.set_size_inches(6,6.6)
 
@@ -634,10 +628,8 @@ def main(argv):
         plt.ylabel('Fitness',fontsize=8,labelpad=1)
         plt.gcf().subplots_adjust(bottom=0.15, left=0.15, right=0.98, top=0.90)
         plt.legend(bbox_to_anchor=(0.9, 1.045),ncol=3,fontsize=7,frameon=False)
-        pp.savefig()
-        plt.clf()
+        plt.savefig(outputDirs[0] + 'QCplots/' + replicateGroup + '_GCcor.pdf')
         plt.close()
-        pp.close()
 
     genicCounts = totalCounts.copy()
     usedCounts = totalCounts.copy()

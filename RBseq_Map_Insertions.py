@@ -1,5 +1,4 @@
 #!/usr/bin/python
-from __future__ import print_function
 import sys
 import argparse
 import numpy as np
@@ -10,8 +9,8 @@ import re
 from Bio.Blast.Applications import NcbiblastnCommandline
 import os
 
-Version = '1.1.0'
-ReleaseDate = 'Jan 8, 2020'
+Version = '1.1.1'
+ReleaseDate = 'Apr 13, 2020'
 
 
 #http://code.activestate.com/recipes/576874-levenshtein-distance/

@@ -3,7 +3,7 @@ Track fitness of deletion mutants with a randomly barcoded random insertion libr
 
 Please note, this is scientific software for research purposes only.  It is offered freely in the hope that it will be useful, but with no guarantees whatsoever.  It has been tested, but only modestly.  Proceed with caution.
 
-Updated 8 April 2019
+Updated 13 April 2019
 
 This software is currently unpublished, but is based on analysis published in 'Functional genomics of lipid metabolism in the oleaginous yeast Rhodosporidium toruloides' by Coradetti et al. 2018 (DOI: 10.7554/eLife.32110.001) and Rapid Quantification of Mutant Fitness in Diverse Bacteria by Sequencing Randomly Bar-Coded Transposons by Wetmore et al 2015 (DOI 10.1128/mBio.00306-15).
 
@@ -316,6 +316,9 @@ python RBseq_Count_Barcodes.py -m metadatafile [--logFile logfile --normLocal 0 
 
   -P/--noPseudoCounts
     If this flag is passed, fitness scores will NOT be computed without 'smart' pseudo counts as in Wetmore et al 2015.  'Smart' pseudo counts improve the accuracy of fitness scores when one condition has very low or no counts.  As smart pseudo counts use data from all insertions in a gene to adjust the counts used for computing fitness scores for individual insertions, it can be argued that they abolish independence of those scores and compromise the stringency of any statistical analysis of those scores. This author believes that they are, on balance, useful, but others may disagree.
+
+  -C/ --centerOnMean
+    By default strain fitness scores are normalized to a median of zero in a given sample. If this flag is passed they will be normalized to a mean of zero.
 
   -B/--fitnessBrowserOutput
     If this flag is passed, a subdirectory in the output directory called Fitness Browser will be created with output files compatible with the LBNL fitness browser by Morgan Price (https://bitbucket.org/berkeleylab/feba). If this flag is passed, the metadata file will require these additional column headings:
