@@ -11,7 +11,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import argparse
 
-Version = '1.1.1'
+Version = '1.1.2'
 ReleaseDate = 'Apr 13, 2020'
 
 

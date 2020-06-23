@@ -9,7 +9,7 @@ import re
 from Bio.Blast.Applications import NcbiblastnCommandline
 import os
 
-Version = '1.1.1'
+Version = '1.1.2'
 ReleaseDate = 'Apr 13, 2020'
 
 

@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 from scipy import stats
 import statsmodels.stats.multitest as smm
 
-Version = '1.1.1'
-ReleaseDate = 'April 13, 2020'
+Version = '1.1.2'
+ReleaseDate = 'June 23, 2020'
 
 
 pd.set_option('display.max_columns', 500)
@@ -256,15 +256,7 @@ def main(argv):
     statusUpdate = 'Calculating strain fitness'
     printUpdate(options.logFile,statusUpdate)
     
-    #Normalize counts accross samples
-    analyzedSamples = list(sampleNames)
-    analyzedSamples.extend(list(references))
-    analyzedSamples = list(set(analyzedSamples))
 
-    medianCounts = poolCounts[analyzedSamples].sum().median()
-    normFactors = 100000000/poolCounts[analyzedSamples].sum()
-    poolCountsNotNormalized = poolCounts.copy()
-    poolCounts[analyzedSamples] = poolCounts[analyzedSamples] * normFactors
     
     #calculate intial strain fitness. 
     comparisons = []
@@ -325,9 +317,11 @@ def main(argv):
         for sampNum,sampleName in enumerate(sampleNames):
             strainFit[sampNum] = np.log2((poolCounts[sampleName] + pseudoCounts[sampNum]**0.5) / (poolCounts[references[sampNum]] + pseudoCounts[sampNum]**-0.5))
             if options.centerOnMean:
-                strainFit[sampNum] = strainFit[sampNum] - geneFit[sampNum].mean()
+                strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum][normMask[sampNum]].mean()
+                
             else:
-                strainFit[sampNum] = strainFit[sampNum] - geneFit[sampNum].median()
+                strainFit[sampNum] = strainFit[sampNum] - strainFit[sampNum][normMask[sampNum]].median()
+
 
     #Option to normalize strain fitness over local neighborhood
     if options.normLocal > 0:
@@ -351,11 +345,27 @@ def main(argv):
     geneFit = weightedFit.groupby('NearestGene')[sampleNumbers].sum()
     geneFit1 = weightedFit1.groupby('NearestGene')[sampleNumbers].sum()
     geneFit2 = weightedFit2.groupby('NearestGene')[sampleNumbers].sum()
+    
+    for sampNum,sampleName in enumerate(sampleNames):
+        if options.centerOnMean:
+            geneFit[sampNum] = geneFit[sampNum] - geneFit[sampNum].mean()
+            geneFit1[sampNum] = geneFit1[sampNum] - geneFit1[sampNum].mean()
+            geneFit2[sampNum] = geneFit2[sampNum] - geneFit2[sampNum].mean()
+        else:
+             geneFit[sampNum] = geneFit[sampNum] - geneFit[sampNum].median()
+             geneFit1[sampNum] = geneFit1[sampNum] - geneFit1[sampNum].median()
+             geneFit2[sampNum] = geneFit2[sampNum] - geneFit2[sampNum].median()
 
     #Filter out genes with no wieghted counts
     geneWeights = weights.groupby('NearestGene')[sampleNumbers].sum()
+    geneWeights1 = weights1.groupby('NearestGene')[sampleNumbers].sum()
+    geneWeights2 = weights2.groupby('NearestGene')[sampleNumbers].sum()
     geneWeightNonZero = (geneWeights[sampleNumbers] != 0).astype('int').replace(0.0, np.nan)
+    geneWeightNonZero1 = (geneWeights1[sampleNumbers] != 0).astype('int').replace(0.0, np.nan)
+    geneWeightNonZero2 = (geneWeights2[sampleNumbers] != 0).astype('int').replace(0.0, np.nan)
     geneFit[sampleNumbers] = geneFit[sampleNumbers]*geneWeightNonZero
+    geneFit1[sampleNumbers] = geneFit1[sampleNumbers]*geneWeightNonZero1
+    geneFit2[sampleNumbers] = geneFit2[sampleNumbers]*geneWeightNonZero2
     
 
     uniqGeneAnnotations = poolCounts[['NearestGene','AlternateID','Annotation']].copy().drop_duplicates()
@@ -490,6 +500,7 @@ def main(argv):
     for replicateGroup in groupSet:
         #Generate plots of fitness in first and second half of the gene
         bothHalvesFilter = ((geneFitAverages1[replicateGroup] != 0) & (geneFitAverages2[replicateGroup] != 0))
+        #includeMask1[sampleNumbers]
         sigFilter01 = pVals[replicateGroup] < 0.05
         sigFilter001 = pVals[replicateGroup] < 0.001
         sig1 = geneFitAverages1[bothHalvesFilter & sigFilter01]
@@ -497,7 +508,6 @@ def main(argv):
         sig1b = geneFitAverages1[bothHalvesFilter & sigFilter001]
         sig2b = geneFitAverages2[bothHalvesFilter & sigFilter001]
         
-        #pp = PdfPages(outputDirs[0] + 'QCplots/' + replicateGroup + '_cor12.pdf')
         fig, ax = plt.subplots()
         fig.set_size_inches(6,6.6)
         ax.axhline(y=0, color='grey',linewidth=0.5,dashes=[1,1],zorder=-1)
@@ -635,9 +645,9 @@ def main(argv):
     usedCounts = totalCounts.copy()
     usedCountsRefs = totalCounts.copy()
     for sampNum,sampleName in enumerate(sampleNames):
-        genicCounts[sampNum] = poolCountsNotNormalized[sampleNames[sampNum]].values * centralCodingMask.astype('int')
-        usedCounts[sampNum] = poolCountsNotNormalized[sampleNames[sampNum]].values * includeMask[sampNum].astype('int')
-        usedCountsRefs[sampNum] = poolCountsNotNormalized[references[sampNum]].values * includeMask[sampNum].astype('int')
+        genicCounts[sampNum] = poolCounts[sampleNames[sampNum]].values * centralCodingMask.astype('int')
+        usedCounts[sampNum] = poolCounts[sampleNames[sampNum]].values * includeMask[sampNum].astype('int')
+        usedCountsRefs[sampNum] = poolCounts[references[sampNum]].values * includeMask[sampNum].astype('int')
     
     Cor12Averages = pd.Series()
     MaxFit = pd.Series()
@@ -829,11 +839,23 @@ def main(argv):
     printUpdate(options.logFile,statusUpdate)
 
 
+    #Normalize counts accross samples
+    analyzedSamples = list(sampleNames)
+    analyzedSamples.extend(list(references))
+    analyzedSamples = list(set(analyzedSamples))
+    medianCounts = poolCounts[analyzedSamples].sum().median()
+    normFactors = medianCounts/poolCounts[analyzedSamples].sum()
+    poolCountsNormalized = poolCounts.copy()
+    poolCountsNormalized[analyzedSamples] = poolCounts[analyzedSamples] * normFactors
+
     #make dataFrame of just rows with counts used in fitness calculations
     wilcoxonTuples = usedCounts.copy()
     wilcoxonPvals = pVals.copy()
+    
     for sampNum in sampleNumbers:
-        wilcoxonTuples[sampNum] = list(zip(usedCounts[sampNum], usedCountsRefs[sampNum]))
+        sampUsedCountsNormalized = poolCountsNormalized[sampleNames[sampNum]].values * includeMask[sampNum].astype('int')
+        refUsedCountsNormalized = poolCountsNormalized[references[sampNum]].values * includeMask[sampNum].astype('int')
+        wilcoxonTuples[sampNum] = list(zip(sampUsedCountsNormalized, refUsedCountsNormalized))
 
     for replicateGroup in groupSet:
         analyzedGenes = []

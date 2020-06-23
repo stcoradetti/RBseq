@@ -9,7 +9,7 @@ import os
 import json
 import timeit
 
-Version = '1.1.1'
+Version = '1.1.2'
 ReleaseDate = 'April 13, 2020'
 
 
