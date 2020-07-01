@@ -9,8 +9,8 @@ import re
 from Bio.Blast.Applications import NcbiblastnCommandline
 import os
 
-Version = '1.1.2'
-ReleaseDate = 'Apr 13, 2020'
+Version = '1.1.3'
+ReleaseDate = 'July 1, 2020'
 
 
 #http://code.activestate.com/recipes/576874-levenshtein-distance/

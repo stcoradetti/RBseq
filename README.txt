@@ -3,7 +3,7 @@ Track fitness of deletion mutants with a randomly barcoded random insertion libr
 
 Please note, this is scientific software for research purposes only.  It is offered freely in the hope that it will be useful, but with no guarantees whatsoever.  It has been tested, but only modestly.  Proceed with caution.
 
-Updated 13 April 2019
+Updated July 1, 2019
 
 This software is currently unpublished, but is based on analysis published in 'Functional genomics of lipid metabolism in the oleaginous yeast Rhodosporidium toruloides' by Coradetti et al. 2018 (DOI: 10.7554/eLife.32110.001) and Rapid Quantification of Mutant Fitness in Diverse Bacteria by Sequencing Randomly Bar-Coded Transposons by Wetmore et al 2015 (DOI 10.1128/mBio.00306-15).
 
@@ -31,6 +31,15 @@ This program takes as input the barcode counts from RBseq_Count.py and calculate
 -Biopython 1.72 or later
 -Anaconda scientific computing environment or the following python libraries: numpy, pandas, matplotlib, json, scipy, and stats models
 -NCBI BLAST+ 2.2.30 or later
+
+Most recently tested with the following versions of python packages:
+python: 3.7.6
+biopython: 1.76
+numpy: 1.18.5
+pandas: 1.0.5
+scipy: 1.5.0
+matplotlib: 3.2.2
+statsmodels: 0.11.1 
 
 --USAGE--
 Each script requires a metadata file to list input sequencing files, required reference files and some common options, including output file locations.  These text files are passed to the script with the -m or --metafile flag.  The scripts provide a series of status updates to STDOUT and simultaneously save them in log file for easy reference later. By default, the log files are given a unique name based on the date, but you can change this with the optional -l or --logFile flag.

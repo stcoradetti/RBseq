@@ -7,10 +7,9 @@ from datetime import datetime
 import re
 import os
 import json
-import timeit
 
-Version = '1.1.2'
-ReleaseDate = 'April 13, 2020'
+Version = '1.1.3'
+ReleaseDate = 'July 1, 2020'
 
 
 def OffByOneList(seq):

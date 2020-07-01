@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 from scipy import stats
 import statsmodels.stats.multitest as smm
 
-Version = '1.1.2'
-ReleaseDate = 'June 23, 2020'
+Version = '1.1.3'
+ReleaseDate = 'July 1, 2020'
 
 
 pd.set_option('display.max_columns', 500)
@@ -110,8 +110,7 @@ def main(argv):
             outputDirs[outputN] = dir+"/"
         if not os.path.exists(outputDirs[outputN]):
             os.makedirs(outputDirs[outputN])
-
-    if not os.path.exists(outputDirs[outputN]+'QCplots/'):
+        if not os.path.exists(outputDirs[outputN]+'QCplots/'):
             os.makedirs(outputDirs[outputN]+'QCplots/')
 
     numSample = len(sampleNames)
@@ -136,7 +135,7 @@ def main(argv):
 
     #extract approximate gene positions from poolcount file
     geneInfo = poolCounts[['NearestGene','scaffold','pos']]
-    genePositions = geneInfo.groupby('NearestGene')['scaffold','pos'].min()
+    genePositions = geneInfo.groupby('NearestGene')[['scaffold','pos']].min()
 
 
     #Make new averaged counts columns for sets of reference conditions used in non-paired comparisons.
@@ -180,9 +179,7 @@ def main(argv):
     firstHalfMask = np.ma.masked_inside(poolCounts['CodingFraction'].values, 2,49).mask
     secondHalfMask = np.ma.masked_inside(poolCounts['CodingFraction'].values, 50,98).mask
 
-    weightingCounts = totalCounts.copy()
-    weightingCounts1 = totalCounts.copy()
-    weightingCounts2 = totalCounts.copy()
+
     includeMask = totalCounts.copy()
     includeMask1 = totalCounts.copy()
     includeMask2 = totalCounts.copy()
@@ -360,9 +357,9 @@ def main(argv):
     geneWeights = weights.groupby('NearestGene')[sampleNumbers].sum()
     geneWeights1 = weights1.groupby('NearestGene')[sampleNumbers].sum()
     geneWeights2 = weights2.groupby('NearestGene')[sampleNumbers].sum()
-    geneWeightNonZero = (geneWeights[sampleNumbers] != 0).astype('int').replace(0.0, np.nan)
-    geneWeightNonZero1 = (geneWeights1[sampleNumbers] != 0).astype('int').replace(0.0, np.nan)
-    geneWeightNonZero2 = (geneWeights2[sampleNumbers] != 0).astype('int').replace(0.0, np.nan)
+    geneWeightNonZero = (geneWeights[sampleNumbers] != 0).astype('int').replace(0, np.nan)
+    geneWeightNonZero1 = (geneWeights1[sampleNumbers] != 0).astype('int').replace(0, np.nan)
+    geneWeightNonZero2 = (geneWeights2[sampleNumbers] != 0).astype('int').replace(0, np.nan)
     geneFit[sampleNumbers] = geneFit[sampleNumbers]*geneWeightNonZero
     geneFit1[sampleNumbers] = geneFit1[sampleNumbers]*geneWeightNonZero1
     geneFit2[sampleNumbers] = geneFit2[sampleNumbers]*geneWeightNonZero2
@@ -430,7 +427,7 @@ def main(argv):
     #MAD12 Mean absolute difference in fitness scores between first and second half of genes.
     MAD12 = (geneFit1[sampleNumbers] - geneFit2[sampleNumbers]).abs().mean()
     
-    MAD12Averages = pd.Series()
+    MAD12Averages = pd.Series(dtype='float64')
     for replicateGroup in groupSet:
         MAD12Averages[replicateGroup] = MAD12[groupSampNumbers[replicateGroup]].mean()
 
@@ -649,17 +646,17 @@ def main(argv):
         usedCounts[sampNum] = poolCounts[sampleNames[sampNum]].values * includeMask[sampNum].astype('int')
         usedCountsRefs[sampNum] = poolCounts[references[sampNum]].values * includeMask[sampNum].astype('int')
     
-    Cor12Averages = pd.Series()
-    MaxFit = pd.Series()
-    groupTotals = pd.Series()
-    groupGenic = pd.Series()
-    groupUsed = pd.Series()
+    Cor12Averages = pd.Series(dtype='float64')
+    MaxFit = pd.Series(dtype='float64')
+    groupTotals = pd.Series(dtype='float64')
+    groupGenic = pd.Series(dtype='float64')
+    groupUsed = pd.Series(dtype='float64')
     groupUsedCounts = genicCounts[['barcode','NearestGene']].copy()
     groupUsedRefCounts = genicCounts[['barcode','NearestGene']].copy()
-    groupMedian = pd.Series()
-    groupMean = pd.Series()
-    groupRefMedian = pd.Series()
-    groupAdjCor = pd.Series()
+    groupMedian = pd.Series(dtype='float64')
+    groupMean = pd.Series(dtype='float64')
+    groupRefMedian = pd.Series(dtype='float64')
+    groupAdjCor = pd.Series(dtype='float64')
     positionalFit = geneFitAverages.merge(genePositions, left_index=True, right_index=True)
     positionalFit = positionalFit.sort_values(['scaffold','pos'])
     for replicateGroup in groupSet:

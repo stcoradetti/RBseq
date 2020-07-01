@@ -7,18 +7,11 @@ from Bio import SeqIO
 import operator
 from datetime import datetime
 import collections
-import matplotlib
 import matplotlib.pyplot as plt
 import argparse
 
-Version = '1.1.2'
-ReleaseDate = 'Apr 13, 2020'
-
-
-plt.style.use('seaborn-colorblind')
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = ['Arial']
-plt.rcParams['pdf.fonttype'] = 42
+Version = '1.1.3'
+ReleaseDate = 'July 1, 2020'
 
 
 def printUpdate(logfile,update):
@@ -352,9 +345,10 @@ def main(argv):
         plt.xticks(np.arange(len(plotLabels)),plotLabels,fontsize=8,rotation=20)
         plt.yticks(fontsize=8)
         plt.ylabel('Fraction (%)',fontsize=8,labelpad=1)
-        plt.title('Relative Insertion Frequency by Gene Feature',fontsize=10)
+        plt.title('Relative insertion frequency by gene feature',fontsize=9)
         plt.legend(fontsize=8)
         plt.gcf().subplots_adjust(bottom=0.2, left=0.11, right=0.98, top=0.90)
+        plt.tight_layout()
         plt.savefig(poolFileName+'_insertionDistribution.pdf')
         plt.close()
 
@@ -383,6 +377,7 @@ def main(argv):
         plt.ylabel('Insertions',fontsize=8,labelpad=1)
         plt.title('Inserts per scaffold',fontsize=10)
         plt.gcf().subplots_adjust(bottom=0.16, left=0.13, right=0.98, top=0.90)
+        plt.tight_layout()
         plt.savefig(poolFileName+'_InsertsPerScaffold.pdf')
         plt.close()
 
@@ -432,6 +427,7 @@ def main(argv):
         plt.title('GC content around insertion sites',fontsize=10)
         legend = plt.legend(loc='upper left',edgecolor=None,frameon=False, fontsize=8)
         plt.gcf().subplots_adjust(bottom=0.16, left=0.11, right=0.98, top=0.90)
+        plt.tight_layout()
         plt.savefig(poolFileName+'_GChistogram.pdf')
         plt.close()
 
@@ -493,6 +489,7 @@ def main(argv):
         plt.title('Insert density across scaffold '+scaffold.split(" ")[0],fontsize=10)
         plt.gcf().subplots_adjust(bottom=0.16, left=0.14, right=0.98, top=0.90)
         legend = plt.legend(loc='upper center',edgecolor=None,frameon=False,fontsize=8,ncol=2)
+        plt.tight_layout()
         plt.savefig(poolFileName+"_LargestScaffold.pdf")
         plt.close()
 
