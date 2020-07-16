@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 from scipy import stats
 import statsmodels.stats.multitest as smm
 
-Version = '1.1.3'
-ReleaseDate = 'July 1, 2020'
+Version = '1.1.4'
+ReleaseDate = 'July 16, 2020'
 
 
 pd.set_option('display.max_columns', 500)

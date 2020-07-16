@@ -10,8 +10,8 @@ import collections
 import matplotlib.pyplot as plt
 import argparse
 
-Version = '1.1.3'
-ReleaseDate = 'July 1, 2020'
+Version = '1.1.4'
+ReleaseDate = 'July 16, 2020'
 
 
 def printUpdate(logfile,update):

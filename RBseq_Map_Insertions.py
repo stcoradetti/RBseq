@@ -9,8 +9,8 @@ import re
 from Bio.Blast.Applications import NcbiblastnCommandline
 import os
 
-Version = '1.1.3'
-ReleaseDate = 'July 1, 2020'
+Version = '1.1.4'
+ReleaseDate = 'July 16, 2020'
 
 
 #http://code.activestate.com/recipes/576874-levenshtein-distance/
@@ -255,6 +255,8 @@ def main(argv):
 
             #Load fastq and filter for reads with the expected barcode sequence
             fileToOpen = fastqFile
+            QueryWriteBlock = []
+            NoBarcodeFoundWriteBlock = []
             try:
                 with open(fileToOpen, 'r') as FileHandle:
                     readName=""
@@ -306,33 +308,89 @@ def main(argv):
                                 genomeQuery = readSeq[endOfInsertion:]
                                 if options.noBarcodes:
                                     barcode = genomeQuery[0:20]
-                                try:
-                                    with open(blastQueryFileName, 'a') as blastQueryFile:
-                                        blastQueryFile.write(">" + barcode + "__"  + readName + "\n")
-                                        blastQueryFile.write(genomeQuery+"\n")
-                                        blastQueryFile.close()
-                                except IOError:
-                                    statusUpdate = "  Could not read file:"+blastQueryFileName+" ...exiting."
-                                    printUpdate(options.logFile,statusUpdate)
-                                    sys.exit()
+                                    
+                                QueryWriteBlock.append({'barcode':barcode,'readName':readName,'genomeQuery':genomeQuery})
+                                
+                                
+                                #Write out buffer of blast queries to file when it gets to 10,000 reads
+                                if len(QueryWriteBlock) > 10000:
+                                    textblock = ""
+                                    for readDict in QueryWriteBlock:
+                                        textblock += ">" + readDict['barcode'] + "__"  + readDict['readName'] + "\n"
+                                        textblock += readDict['genomeQuery'] + "\n"
+                                    QueryWriteBlock = []
+                                        
+                                    try:
+                                        with open(blastQueryFileName, 'a') as blastQueryFile:
+                                            blastQueryFile.write(textblock)
+                                            blastQueryFile.close()
+                                    except IOError:
+                                        statusUpdate = "  Could not read file:"+blastQueryFileName+" ...exiting."
+                                        printUpdate(options.logFile,statusUpdate)
+                                        sys.exit()
+                                    
+                                
 
 
 
                             #Save reads without barcodes for troubleshooting TnSeq
                             else:
                                 NbarcodeNotFound+=1
-                                try:
-                                    with open(noBarcodeFoundFileName, 'a') as noBarcodeFile:
-                                        noBarcodeFile.write(readName+"\t"+readSeq+"\n")
-                                        noBarcodeFile.close()
-                                except IOError:
-                                    statusUpdate = "  Could not read file:"+noBarcodeFoundFileName+" ...exiting."
-                                    printUpdate(options.logFile,statusUpdate)
-                                    sys.exit()
+                                NoBarcodeFoundWriteBlock.append({'barcode':barcode,'readName':readName})
+
+                                #Write out buffer of reads without barcodes to file when it gets to 10,000 reads
+                                if len(NoBarcodeFoundWriteBlock) > 10000:
+                                    textblock = ""
+                                    for readDict in NoBarcodeFoundWriteBlock:
+                                        textblock += ">" + readDict['barcode'] + "__"  + readDict['readName'] + "\n"
+                                    NoBarcodeFoundWriteBlock = []
+                                    
+                                    try:
+                                        with open(noBarcodeFoundFileName, 'a') as noBarcodeFile:
+                                            noBarcodeFile.write(textblock)
+                                            noBarcodeFile.close()
+                                    except IOError:
+                                        statusUpdate = "  Could not read file:"+noBarcodeFoundFileName+" ...exiting."
+                                        printUpdate(options.logFile,statusUpdate)
+                                        sys.exit()
+                                    
 
                         readCount+=1
 
                     FileHandle.close()
+                    
+                    #Clear out remaing reads to outputfiles
+                    textblock = ""
+                    for readDict in QueryWriteBlock:
+                        textblock += ">" + readDict['barcode'] + "__"  + readDict['readName'] + "\n"
+                        textblock += readDict['genomeQuery'] + "\n"
+                    QueryWriteBlock = []
+                        
+                    try:
+                        with open(blastQueryFileName, 'a') as blastQueryFile:
+                            blastQueryFile.write(textblock)
+                            blastQueryFile.close()
+                    except IOError:
+                        statusUpdate = "  Could not read file:"+blastQueryFileName+" ...exiting."
+                        printUpdate(options.logFile,statusUpdate)
+                        sys.exit()
+                    
+                    
+                    textblock = ""
+                    for readDict in NoBarcodeFoundWriteBlock:
+                        textblock += ">" + readDict['barcode'] + "__"  + readDict['readName'] + "\n"
+                    NoBarcodeFoundWriteBlock = []
+                        
+                    try:
+                        with open(noBarcodeFoundFileName, 'a') as noBarcodeFile:
+                            noBarcodeFile.write(textblock)
+                            noBarcodeFile.close()
+                            
+                    except IOError:
+                        statusUpdate = "  Could not read file:"+noBarcodeFoundFileName+" ...exiting."
+                        printUpdate(options.logFile,statusUpdate)
+                        sys.exit()
+                    
 
             except IOError:
                 statusUpdate = "  Could not read file:"+fileToOpen+" ...exiting."
