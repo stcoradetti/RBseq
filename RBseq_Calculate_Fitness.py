@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 from scipy import stats
 import statsmodels.stats.multitest as smm
 
-Version = '1.1.4'
-ReleaseDate = 'July 16, 2020'
+Version = '1.1.7'
+ReleaseDate = 'November 20, 2020'
 
 
 pd.set_option('display.max_columns', 500)
@@ -32,6 +32,8 @@ def main(argv):
     parser.add_argument("-P", "--noPseudoCounts", dest="smartPseudoCounts", action='store_false', help="If this flag is passed, fitness scores will NOT be computed with 'smart' pseudocounts as in Wetmore et al 2015.", default=True)
     parser.add_argument("-B", "--fitnessBrowserOutput", dest="fitnessBrowserOutput", action='store_true', help="If this flag is passed, output files will be saved in formats compatible with the Arkin Lab Fitness Browser", default=False)
     parser.add_argument("-C", "--centerOnMean", dest="centerOnMean", action='store_true', help="By default strain fitness scores are normalized to a median of zero in a given sample.  If this flag is passed they will be normalized to a mean of zero", default=False)
+    parser.add_argument("-N", "--minReadsMainLocation", dest="minReadsMainLocation", help="Minimum number of reads used define the barcode's chromosomal location in the mapping step, passed through to the poolcount file as nMainLocation. Barcodes mapped with only a few reads may not be accurately located, or the mapped barcode might also exist in greater abundance in another strain.", default=2, type=int)
+    parser.add_argument("-R", "--maximumConcatamerRatio", dest="maximumConcatamerRatio", help="The maximum allowable ratio of reads mapped to the insertion sequences versus reads mapped to the genome. If sequenceing efficiency were constant, this ratio plus one would be a measure of the length of concatameric insertions.  If this ratio is high it could indicate the barcode incorporated into a long stretch of concatenated insertions sequences, or that it has inserted in several locatoins in the genome, but only one location where the junction with the genome was mapped.", default=8, type=int)
 
     options = parser.parse_args()
 
@@ -130,7 +132,8 @@ def main(argv):
         statusUpdate = " Could not read file:"+fileToOpen+" ...exiting."
         printUpdate(options.logFile,statusUpdate)
         sys.exit()
-
+        
+    
     poolCounts['CodingFraction'] = poolCounts['CodingFraction'].fillna(0)
 
     #extract approximate gene positions from poolcount file
@@ -153,8 +156,8 @@ def main(argv):
     statusUpdate = 'Finding barcodes in coding regions with sufficient counts for fitness analysis'
     printUpdate(options.logFile,statusUpdate)
 
-    infoColumns = poolCounts.columns.values[1:5]
-    dataColumns = poolCounts.columns.values[5:]
+    infoColumns = poolCounts.columns.values[1:10]
+    dataColumns = poolCounts.columns.values[10:]
     barcodesDict = {'barcode':poolCounts['barcode'].values}
 
     totalCounts = pd.DataFrame.from_dict(barcodesDict)
@@ -162,7 +165,6 @@ def main(argv):
     sampleCounts = pd.DataFrame.from_dict(barcodesDict)
     refCounts = pd.DataFrame.from_dict(barcodesDict)
     pseudoCounts = pd.DataFrame.from_dict(barcodesDict)
-    
     
     for column in infoColumns:
         totalCounts[column] = poolCounts[column].values
@@ -188,6 +190,9 @@ def main(argv):
     weightingFactors2 = totalCounts.copy()
     normMask = totalCounts.copy()
 
+    #drop problematic barcodes based on minReadsMainLocation and maximumConcatamerRatio
+    enoughMappingReads = poolCounts['nMainLocation'].astype(int) >= options.minReadsMainLocation
+    acceptableRatio = poolCounts['nInsert']/poolCounts['nMainLocation'] <= options.maximumConcatamerRatio
     
     for sampNum,sampleName in enumerate(sampleNames):
         #total up all counts between experimental and reference conditions for each comparison
@@ -204,9 +209,9 @@ def main(argv):
         eligibleCounts1[sampNum] = eligibleCounts[sampNum] * firstHalfMask.astype('int')
         eligibleCounts2[sampNum] = eligibleCounts[sampNum] * secondHalfMask.astype('int')
         
-        includeMask[sampNum] = eligibleCounts[sampNum].astype('bool')
-        includeMask1[sampNum] = eligibleCounts1[sampNum].astype('bool')
-        includeMask2[sampNum] = eligibleCounts2[sampNum].astype('bool')
+        includeMask[sampNum] = eligibleCounts[sampNum].astype('bool') & enoughMappingReads & acceptableRatio
+        includeMask1[sampNum] = eligibleCounts1[sampNum].astype('bool') & enoughMappingReads & acceptableRatio
+        includeMask2[sampNum] = eligibleCounts2[sampNum].astype('bool') & enoughMappingReads & acceptableRatio
 
         #calculate weighting factors for each strain fitness score, will need to mask out unused strains later
         weightingFactors[sampNum] = (np.log(2)**2) / (1.0 / (1 + poolCounts[sampleNames[sampNum]]) + 1.0 / (1 + poolCounts[references[sampNum]]))
@@ -214,6 +219,10 @@ def main(argv):
     #maximum weights for any strain is that of a strain with maximumWeightCounts (e.g. 20) in both sample and reference condition
     maxWeight = (np.log(2)**2) / (1.0 / (1 + options.maxWeightCounts) + 1.0 / (1 + options.maxWeightCounts))
     weightingFactors[sampleNumbers] = np.ma.masked_outside(weightingFactors[sampleNumbers],0,maxWeight).filled(maxWeight)
+    
+    
+    
+    
 
     #mask out insertions in genes without sufficient total counts per gene
     #for comparing 1st and 2nd half of genes, both halves must meet minimum counts per gene requirement
@@ -238,6 +247,7 @@ def main(argv):
     enoughInserts1 = np.ma.masked_outside(includeMask1.groupby('NearestGene')[sampleNumbers].transform(np.sum),0,options.minInsertions-1).mask
     enoughInserts2 = np.ma.masked_outside(includeMask2.groupby('NearestGene')[sampleNumbers].transform(np.sum),0,options.minInsertions-1).mask
     enoughInsertsHalves = enoughInserts1 & enoughInserts2
+
     
     includeMask[sampleNumbers] = includeMask[sampleNumbers] & enoughInserts
     includeMask1[sampleNumbers] = includeMask1[sampleNumbers] & enoughInsertsHalves
@@ -306,7 +316,8 @@ def main(argv):
         printUpdate(options.logFile,statusUpdate)
         readRatios = (sampleCounts.groupby('NearestGene')[sampleNumbers].sum() + 0.1)/(refCounts.groupby('NearestGene')[sampleNumbers].sum() + 0.1)
         pseudoCountsByGene = (2**geneFit)*readRatios
-        pseudoCounts = pseudoCounts.merge(pseudoCountsByGene, on='NearestGene').fillna(0.1)
+        
+        pseudoCounts = pseudoCounts.merge(pseudoCountsByGene, left_on='NearestGene', right_index=True).fillna(0.1)
         pseudoCounts[sampleNumbers] = pseudoCounts[sampleNumbers].replace(0.0, 0.1)
         
         geneFit[sampleNumbers] = geneFit[sampleNumbers].replace(0.0, np.nan)
@@ -343,15 +354,7 @@ def main(argv):
     geneFit1 = weightedFit1.groupby('NearestGene')[sampleNumbers].sum()
     geneFit2 = weightedFit2.groupby('NearestGene')[sampleNumbers].sum()
     
-    for sampNum,sampleName in enumerate(sampleNames):
-        if options.centerOnMean:
-            geneFit[sampNum] = geneFit[sampNum] - geneFit[sampNum].mean()
-            geneFit1[sampNum] = geneFit1[sampNum] - geneFit1[sampNum].mean()
-            geneFit2[sampNum] = geneFit2[sampNum] - geneFit2[sampNum].mean()
-        else:
-             geneFit[sampNum] = geneFit[sampNum] - geneFit[sampNum].median()
-             geneFit1[sampNum] = geneFit1[sampNum] - geneFit1[sampNum].median()
-             geneFit2[sampNum] = geneFit2[sampNum] - geneFit2[sampNum].median()
+
 
     #Filter out genes with no wieghted counts
     geneWeights = weights.groupby('NearestGene')[sampleNumbers].sum()
@@ -364,11 +367,27 @@ def main(argv):
     geneFit1[sampleNumbers] = geneFit1[sampleNumbers]*geneWeightNonZero1
     geneFit2[sampleNumbers] = geneFit2[sampleNumbers]*geneWeightNonZero2
     
+    #Final renormalization
+    for sampNum,sampleName in enumerate(sampleNames):
+        if options.centerOnMean:
+            strainFit[sampNum] = strainFit[sampNum] - geneFit[sampNum].mean()
+            geneFit[sampNum] = geneFit[sampNum] - geneFit[sampNum].mean()
+            geneFit1[sampNum] = geneFit1[sampNum] - geneFit1[sampNum].mean()
+            geneFit2[sampNum] = geneFit2[sampNum] - geneFit2[sampNum].mean()
+            
+            
+        else:
+            strainFit[sampNum] = strainFit[sampNum] - geneFit[sampNum].median()
+            geneFit[sampNum] = geneFit[sampNum] - geneFit[sampNum].median()
+            geneFit1[sampNum] = geneFit1[sampNum] - geneFit1[sampNum].median()
+            geneFit2[sampNum] = geneFit2[sampNum] - geneFit2[sampNum].median()
+             
+    
 
     uniqGeneAnnotations = poolCounts[['NearestGene','AlternateID','Annotation']].copy().drop_duplicates()
     uniqGeneAnnotations = uniqGeneAnnotations.set_index('NearestGene')
 
-    geneFitAnnotated = geneFit.merge(uniqGeneAnnotations, left_index=True, right_on='NearestGene',how='left')
+    geneFitAnnotated = geneFit.merge(uniqGeneAnnotations, left_index=True, right_index=True,how='left')
     geneFitAnnotated = geneFitAnnotated[['AlternateID','Annotation']+sampleNumbers]
         
     #Save fitness data
@@ -563,14 +582,13 @@ def main(argv):
         fig, ax = plt.subplots()
         fig.set_size_inches(6,6.6)
 
-        longestScaffold = strainFit.loc[strainFit['pos'].idxmax(),'scaffold']
-        scaffData = strainFit[strainFit['scaffold'] == longestScaffold]
-        geneList = scaffData['NearestGene']
-        posList = scaffData['pos']
-
+        longestScaffold = strainFit.iloc[strainFit['pos'].idxmax()]['scaffold']
+        geneList = genePositions[genePositions['scaffold'] == longestScaffold].index
+        posList = genePositions[genePositions['scaffold'] == longestScaffold]['pos'].values
         plotGenes = []
         plotFit = []
         plotPos = []
+        
         for idx,gene in enumerate(geneList):
             if gene not in plotGenes:
                 fitEntry = geneFitAverages.loc[gene,replicateGroup]
@@ -587,9 +605,7 @@ def main(argv):
         runningAve = cumSumFit[window - 1:] / window
         plt.plot(plotPos[49:-50], runningAve, label='100 gene rolling average')
         
-            
-
-        plt.title('Fitness scores on largest scaffold:' + replicateGroup,fontsize=10)
+        plt.title('Fitness scores on scaffold: ' + longestScaffold + ' ' + replicateGroup,fontsize=10)
         legend = plt.legend(loc='upper left',edgecolor=None,frameon=False, fontsize=8,labelspacing=0.1,handletextpad=1)
         plt.ylim(-2,2)
         plt.xticks(fontsize=8)
@@ -604,9 +620,13 @@ def main(argv):
         fig, ax = plt.subplots()
         fig.set_size_inches(6,6.6)
 
-        fitScores = strainFit[groupSampNumbers[replicateGroup]].mean(axis=1)
+        fitScores = strainFitUsed[groupSampNumbers[replicateGroup]].mean(axis=1)
+        fitScores = fitScores[fitScores != 0.0]
+        GCused = poolCounts.iloc[fitScores.index]['LocalGCpercent']
+        
+        fitVGC = pd.DataFrame({"Fit":fitScores.values,"GC":GCused.values})
 
-        GCcor_sample = np.corrcoef(fitScores,poolCounts['LocalGCpercent'])[0,1]
+        GCcor_sample = np.corrcoef(fitVGC['Fit'],fitVGC['GC'])[0,1]
         GCcor.append(GCcor_sample)
 
         means = []
@@ -616,9 +636,9 @@ def main(argv):
         for GCpct in list(range(35,75)):
             if len(fitScores[poolCounts['LocalGCpercent'] == GCpct]) > 50:
                 GCpctRange.append(GCpct)
-                mean = fitScores[poolCounts['LocalGCpercent'] == GCpct].mean(axis=0)
-                upperQuartile = fitScores[poolCounts['LocalGCpercent'] == GCpct].quantile(0.75)
-                lowerQuartile = fitScores[poolCounts['LocalGCpercent'] == GCpct].quantile(0.25)
+                mean = fitVGC[fitVGC['GC'] == GCpct]['Fit'].mean(axis=0)
+                upperQuartile = fitVGC[fitVGC['GC'] == GCpct]['Fit'].quantile(0.75)
+                lowerQuartile = fitVGC[fitVGC['GC'] == GCpct]['Fit'].quantile(0.25)
                 means.append(mean)
                 meansPlus.append(upperQuartile)
                 meansMinus.append(lowerQuartile)

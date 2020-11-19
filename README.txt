@@ -326,8 +326,15 @@ python RBseq_Count_Barcodes.py -m metadatafile [--logFile logfile --normLocal 0 
   -P/--noPseudoCounts
     If this flag is passed, fitness scores will NOT be computed without 'smart' pseudo counts as in Wetmore et al 2015.  'Smart' pseudo counts improve the accuracy of fitness scores when one condition has very low or no counts.  As smart pseudo counts use data from all insertions in a gene to adjust the counts used for computing fitness scores for individual insertions, it can be argued that they abolish independence of those scores and compromise the stringency of any statistical analysis of those scores. This author believes that they are, on balance, useful, but others may disagree.
 
-  -C/ --centerOnMean
+  -C/--centerOnMean
     By default strain fitness scores are normalized to a median of zero in a given sample. If this flag is passed they will be normalized to a mean of zero.
+
+  -N/--minReadsMainLocation
+    Minimum number of reads used define the barcode's chromosomal location in the mapping step, passed through to the poolcount file as nMainLocation. Barcodes mapped with only a few reads may not be accurately located, or the mapped barcode might also exist in greater abundance in another strain. Default is 2.
+
+  -R/--maximumConcatamerRatio
+    The maximum allowable ratio of reads mapped to the insertion sequences versus reads mapped to the genome. If sequenceing efficiency were constant, this ratio plus one would be a measure of the length of concatameric insertions.  If this ratio is high it could indicate the barcode incorporated into a long stretch of concatenated insertions sequences, or that it has inserted in several locatoins in the genome, but only one location where the junction with the genome was mapped. Default is 8.
+
 
   -B/--fitnessBrowserOutput
     If this flag is passed, a subdirectory in the output directory called Fitness Browser will be created with output files compatible with the LBNL fitness browser by Morgan Price (https://bitbucket.org/berkeleylab/feba). If this flag is passed, the metadata file will require these additional column headings:

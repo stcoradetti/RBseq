@@ -9,8 +9,8 @@ import re
 from Bio.Blast.Applications import NcbiblastnCommandline
 import os
 
-Version = '1.1.4'
-ReleaseDate = 'July 16, 2020'
+Version = '1.1.7'
+ReleaseDate = 'November 20, 2020'
 
 
 #http://code.activestate.com/recipes/576874-levenshtein-distance/
@@ -86,11 +86,12 @@ def matchExpected(searchSeq,readSeq,offset,wobbleAllowed):
     
 
 def main(argv):
-    timestamp = datetime.now().strftime('%Y%m%H%M')
+    timestamp = datetime.now().strftime('%Y%m%d%H%M')
     parser = argparse.ArgumentParser()
+    defaultLog = "Map_"+timestamp+".log"
 
     parser.add_argument("-m", "--metafile", dest="metafile", help="Metadata file of TnSeq runs. A tab-delimited file with columns titled Pool, ShortName, Fastq, ReadModel, InsertionSequence, GenomeSequence, OutputDir, GeneLocations, GeneAnnotations, GeneIdentifier.  See README for more detail",default="metafile.txt")
-    parser.add_argument("-l", "--logFile", dest="logFile", help="File to write run log to. Default is Map_TIMESTAMP.log",default="Map_"+timestamp+".log")
+    parser.add_argument("-l", "--logFile", dest="logFile", help="File to write run log to. Default is Map_TIMESTAMP.log saved in the first output folder passed in the metafile",default=defaultLog)
     parser.add_argument("-q", "--qual", dest="minQual", help="Minimum quality score for the barcode region for a read to be mapped. Default is 10",default=10)
     parser.add_argument("-b", "--matchBefore", dest="matchBefore", help="Number of bases before the barcode to match. Default is 6", default=6, type=int)
     parser.add_argument("-a", "--matchAfter", dest="matchAfter", help="Number of bases in the constant region after the barcode to match. Default is 6. Note that if read is too short to search 6 bases after the barcode, but at least 3 bases remain to be matched, then those bases will be used.", default=6, type=int)
@@ -106,7 +107,9 @@ def main(argv):
     parser.add_argument("-e", "--maxEvalue", dest="maxEvalue", help="Maximum Evalue allowed when BLASTing sequences to the genome or insert. Default is 0.1", default=0.1, type=float)
     parser.add_argument("-u", "--useMappedFiles", dest="useMappedFiles",  action='store_true', help="Bypass the mapping step and work from previously mapped files in the output directory", default=False)
     parser.add_argument("-I", "--noInsertHits", dest="noInsertHits",action='store_true', help="Skip search for additional insertion sequence after the expected junction with the genome. Default behavior is to look for these sequences, typically indicating concatameric insertions. Turning it off will save time if concatamers aren't common in your mutant pool.", default=False)
+    parser.add_argument("-M", "--MinimumReads", dest="MinimumReads", help="The minimum number of reads a barcode must have to be counted in the mutant pool.  In theory barcodes seen in only a few reads could be more likely to be artifacts or more likely to have less reliably mapped junction locations.  But default this is set to 1", default=1, type=int)
     parser.add_argument("-n", "--noBarcodes", dest="noBarcodes", action='store_true', help="This flag is used for optimizing library construction protocols with non-barcoded sequences.  As generating a diverse pool of insertion constructs with unique barcodes can be time consuming, a test insertion library can be created with constructs containing just one constant barcode. If TnSeq is performed on the resulting library, the distinct locations of insertions can be mapped, but they will all have the same sequence barcode associated with the insertion.  To allow characterization of the library with this script, this flag signals to use a snippet of the associated genomic sequence as a substitute for a sequence barcode on the insertion.  This allows for distinct insertions to be mapped and estimation of library diversity and identification of biases in insertion position, etc.", default=False)
+    parser.add_argument("-R", "--maximumConcatamerRatio", dest="maximumConcatamerRatio", help="This option is obsolete. The maximum allowable ratio of reads mapped to the insertion sequences versus reads mapped to the genome. If sequenceing efficiency were constant, this ratio plus one would be a measure of the length of concatameric insertions.  If this ratio is high it could indicate the barcode incorporated into a long stretch of concatenated insertions sequences, or that it has inserted in several locatoins in the genome, but only one location where the junction with the genome was mapped. In current versions of the RB-TDNAseq pipeline information about number of mappings to the main genomic location and to the insert are passed to the poolcounts file so filtering on inferred concatamer lenght can occur at that step.", default=1000, type=int)
 
     options = parser.parse_args()
 
@@ -150,6 +153,14 @@ def main(argv):
             statusUpdate = "Metadata file is missing column "+requiredColumn+" ...exiting."
             printUpdate(options.logFile,statusUpdate)
             sys.exit()
+            
+    shortNameList = list(metaFrame.ShortName.values)
+    duplicateShortNames = [x for n, x in enumerate(shortNameList) if x in shortNameList[:n]]
+    if len(duplicateShortNames) > 0:
+        statusUpdate = "WARNING! Non-uniuqe entries found in ShortName column of metadata file: "+",".join(set(duplicateShortNames))+". Each unique fastq file should have its own ShortName entry for naming intermediate files."
+        printUpdate(options.logFile,statusUpdate)
+        sys.exit()
+        
 
     #Get a list of fastqs and matching model files from the metadata
     fastqFiles=metaFrame['Fastq'].values
@@ -165,6 +176,7 @@ def main(argv):
             outputDirs[outputN] = dir+"/"
         if not os.path.exists(outputDirs[outputN]):
             os.makedirs(outputDirs[outputN])
+            
 
     #Loop through fastq files and map TnSeq reads to the genome
     if options.useMappedFiles:
@@ -300,6 +312,9 @@ def main(argv):
                                         foundEnd, deviation = matchExpected(searchJunction,readSeq,offsetAfter+deviationBefore+deviationAfter+scanPosition,options.wobbleAllowed)
                                         if foundEnd:
                                             endOfInsertion = offsetAfter + deviationBefore + deviationAfter + scanPosition + options.matchJunction
+                                            if len(readSeq[endOfInsertion:]) < 20:
+                                                foundEnd = False
+                                            
 
                             #Use the end of sequence matching the insertion model as the junction point with the genome.
                             genomeQuery = ""
@@ -691,7 +706,7 @@ def main(argv):
             primeLocationAbundance = 0
 
             #Ignore barcodes with vast majority of reads in insert
-            if (insertReads > (sorted_locations[0][1] * 7)):
+            if (insertReads > (sorted_locations[0][1] * options.maximumConcatamerRatio)):
                 insertionType = "insert"
                 primeLocationAbundance = insertReads
 

@@ -8,8 +8,8 @@ import re
 import os
 import json
 
-Version = '1.1.4'
-ReleaseDate = 'July 16, 2020'
+Version = '1.1.7'
+ReleaseDate = 'November 20, 2020'
 
 
 def OffByOneList(seq):
@@ -148,7 +148,7 @@ def main(argv):
             sys.exit()
   
     if poolFileFound:
-        poolCounts = poolFrame[['rcbarcode','scaffold','pos','NearestGene','CodingFraction','LocalGCpercent','AlternateID','Annotation']].copy()
+        poolCounts = poolFrame[['rcbarcode','scaffold','pos','nMainLocation','nInsert','NearestGene','CodingFraction','LocalGCpercent','AlternateID','Annotation']].copy()
         poolCounts = poolCounts.rename(index=str, columns={'rcbarcode':'barcode'})
         poolCounts_byIndex = poolCounts.copy()
     else:
@@ -173,9 +173,10 @@ def main(argv):
         barcodeCounts={}
 
         if  indexRow['UsePrecounted']:
-            statusUpdate = '  Loading previously counted reads for '+ indexRow['OutputDir']
-            printUpdate(options.logFile,statusUpdate)
             fileToOpen = outputDir+"countsFiles/"+str(fileIndex)+'.counts'
+            statusUpdate = '  Loading previously counted reads from '+ fileToOpen
+            printUpdate(options.logFile,statusUpdate)
+
             try:
                 with open(fileToOpen, 'r') as file:
                     barcodeCounts = json.load(file)
@@ -361,7 +362,8 @@ def main(argv):
         sumStats['TotalBarcodes'].append(len(barcodeCounts))
         statusUpdate = "  Total barcodes seen (incudes sequencing errors): " + str(len(barcodeCounts))
         printUpdate(options.logFile,statusUpdate)
-
+        
+        
         if poolFileFound:
             if (not options.quietMode):
                 statusUpdate = "  Matching barcodes to poolfile"
@@ -382,6 +384,7 @@ def main(argv):
             sumStats['TotalBarcodesInPoolfile'].append(NbarcodesInPool)
             sumStats['BarcodeInPoolfileReads'].append(totalReadsInPool)
         else:
+            barcodeCountsFrame = pd.DataFrame.from_dict(barcodeCounts, orient='index',columns=[fileIndex],dtype=int)
             sumStats['TotalBarcodesInPoolfile'].append(np.nan)
             sumStats['BarcodeInPoolfileReads'].append(np.nan)
 
