@@ -3,7 +3,7 @@ Track fitness of deletion mutants with a randomly barcoded random insertion libr
 
 Please note, this is scientific software for research purposes only.  It is offered freely in the hope that it will be useful, but with no guarantees whatsoever.  It has been tested, but only modestly.  Proceed with caution.
 
-Updated July 1, 2019
+Updated November 20, 2020
 
 This software is currently unpublished, but is based on analysis published in 'Functional genomics of lipid metabolism in the oleaginous yeast Rhodosporidium toruloides' by Coradetti et al. 2018 (DOI: 10.7554/eLife.32110.001) and Rapid Quantification of Mutant Fitness in Diverse Bacteria by Sequencing Randomly Bar-Coded Transposons by Wetmore et al 2015 (DOI 10.1128/mBio.00306-15).
 
