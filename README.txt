@@ -324,7 +324,7 @@ python RBseq_Count_Barcodes.py -m metadatafile [--logFile logfile --normLocal 0 
     Integer. Maximum counts to be used for gene fitness score calculation.  E.g. if set at 50, then two insertions with 50 and 100 counts would be weighted equally in computing gene fitness, but an insertion with 10 counts would have a smaller weight
 
   -P/--noPseudoCounts
-    If this flag is passed, fitness scores will NOT be computed without 'smart' pseudo counts as in Wetmore et al 2015.  'Smart' pseudo counts improve the accuracy of fitness scores when one condition has very low or no counts.  As smart pseudo counts use data from all insertions in a gene to adjust the counts used for computing fitness scores for individual insertions, it can be argued that they abolish independence of those scores and compromise the stringency of any statistical analysis of those scores. This author believes that they are, on balance, useful, but others may disagree.
+    If this flag is passed, fitness scores will NOT be computed with 'smart' pseudo counts as in Wetmore et al 2015.  'Smart' pseudo counts improve the accuracy of fitness scores when one condition has very low or no counts.  As smart pseudo counts use data from all insertions in a gene to adjust the counts used for computing fitness scores for individual insertions, it can be argued that they abolish independence of those scores and compromise the stringency of any statistical analysis of those scores. This author believes that they are, on balance, useful, but others may disagree.
 
   -C/--centerOnMean
     By default strain fitness scores are normalized to a median of zero in a given sample. If this flag is passed they will be normalized to a mean of zero.
