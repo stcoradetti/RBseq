@@ -3,13 +3,20 @@ Track fitness of deletion mutants with a randomly barcoded random insertion libr
 
 Please note, this is scientific software for research purposes only.  It is offered freely in the hope that it will be useful, but with no guarantees whatsoever.  It has been tested, but only modestly.  Proceed with caution.
 
-Updated November 20, 2020
+Update September 2025:
 
-This software is currently unpublished, but is based on analysis published in 'Functional genomics of lipid metabolism in the oleaginous yeast Rhodosporidium toruloides' by Coradetti et al. 2018 (DOI: 10.7554/eLife.32110.001) and Rapid Quantification of Mutant Fitness in Diverse Bacteria by Sequencing Randomly Bar-Coded Transposons by Wetmore et al 2015 (DOI 10.1128/mBio.00306-15).
+RBseq is a python-based pipeline for performing genome-wide experiments to quantify the relative fitness of random insertion mutants with unique sequence barcodes.  This software was developed specifically with fungal genomes in mind, but theoretically should work with any eukaryotic genome.  It is getting old enough that depreciation warnings are becoming and issue and future use may require some light debugging to get around those errors.
 
+If you find it useful please cite the following paper:
+Multi-omics driven metabolic network reconstruction and analysis of lignocellulosic carbon utilization in Rhodosporidium toruloides by Kem et al. 2021 (DOI:10.3389/fbioe.2020.612832)
 
---OVERVIEW--
-RBseq is a python-based pipeline for performing genome-wide experiments to quantify the relative fitness of random insertion mutants with unique sequence barcodes.  This software was developed specifically with fungal genomes in mind, but theoretically should work with any eukaryotic genome.
+The scripts found here were derived from analysis pipeline first used in:
+Functional genomics of lipid metabolism in the oleaginous yeast Rhodosporidium toruloides by Coradetti et al. 2018 (DOI: 10.7554/eLife.32110.001)
+
+And ultimately derived from the experimental framework developed in:
+Rapid Quantification of Mutant Fitness in Diverse Bacteria by Sequencing Randomly Bar-Coded Transposons by Wetmore et al 2015 (DOI 10.1128/mBio.00306-15).
+
+Functional Readme originally posted in November 2020:
 
 The RBseq package consists of four programs which each carry out a distinct step required for fitness analysis. The process is (1) map insertion locations and associate barcodes, (2) annotate the genomic context of those insertions, (3) count barcodes in different conditions, and then (4) calculate fitness scores for each gene, aggregating data from several barcoded insertions per gene.  Once a given 'pool' of mutant strains has been characterized by (1) and (2), (3) and (4) can be repeated numerous times on diverse experiments starting with the same mutant pool.  For a detailed example of this process see "Rapid Quantification of Mutant Fitness in Diverse Bacteria by Sequencing Randomly Bar-Coded Transposons" by Wetmore et al 2015 (DOI: 10.1128/mBio.00306-15) and "Functional genomics of lipid metabolism in the oleaginous yeast Rhodosporidium toruloides" by Coradetti et al 2018 (DOI: 10.7554/eLife.32110).
 
@@ -148,24 +155,35 @@ RBseq_Map_Insertions.py Outputs
 
   POOL_poolfile
     Tab-delimited file describing the pool of insertion mutants for which unique barcodes mapped to a single unambiguous genomic location.  This file is used for downstream analysis. Other outputs are provided for troubleshooting analysis and library construction.
-  POOL_poolfile_ambiguous
+
+  POOL_poolfile_ambiguous
     Barcodes ambiguously mapping to two or more locations.  These are barcodes inserted into sequence with one or more very similar sequences in the genome, or with poor quality reads for mapping the junction to the genome, creating uncertainty as to where exactly the barcode is inserted.
-  POOL_poolfile_filteredLocal
+
+  POOL_poolfile_filteredLocal
     Barcodes that were mapped close to a very similar, more abundant barcode
-  POOL_poolfile_insertReadsOnly
+
+  POOL_poolfile_insertReadsOnly
     Barcodes that only mapped to insert sequences.  These could be barcodes in concatameric insertions for which the junction with the genome is difficult to amplify or in multi-barcode concatamers
-  POOL_poolfile_multiLocus
+
+  POOL_poolfile_multiLocus
     Barcodes with reads mapping to two or more distinct locations.  Most likely the same sequence barcode inserted in two or more different genomic locations
-  POOL_poolfile_offByOne    Barcodes that differed by just one base from much more abundant barcodes.  Almost certainly sequencing errors.  
+
+  POOL_poolfile_offByOne
+    Barcodes that differed by just one base from much more abundant barcodes.  Almost certainly sequencing errors.
+  
   TNSEQ_FILE_blastGenome.txt
     Results from the BLAST search of sequences from TNSEQ_FILE against the genome.
-  TNSEQ_FILE_blastInsert.txt
+
+  TNSEQ_FILE_blastInsert.txt
     Results from the BLAST search of sequences from TNSEQ_FILE against the genome.
-  TNSEQ_FILE_blastquery.fasta
+
+  TNSEQ_FILE_blastquery.fasta
     Sequences blasted agains the genome/insert from TNSEQ_FILE
-  TNSEQ_FILE_mapped.txt
+
+  TNSEQ_FILE_mapped.txt
     Summary of each read blasted against the genome/insert, barcode sequence found and information about the blast results
-  TNSEQ_FILE_noBarcodeFound.txt
+
+  TNSEQ_FILE_noBarcodeFound.txt
     Reads for which the compliant barcode sequences were not found.
 
 --
@@ -192,13 +210,17 @@ RBseq_Annotate_Insertions.py Outputs
 
   POOL_poolfile_GChistogram.pdf
     A histogram of GC content around insertion sites versus GC content in the genome.  Included to detect GC bias in insertion rates.
-  POOL_poolfile_insertionDistribution.pdf
+
+  POOL_poolfile_insertionDistribution.pdf
     A graph comparing frequency of insertions in promoters, exons, etc versus percent of the genome those features comprise. Included to detect feature bias in insertion rates.  With many insertional strategies, higher insertion rates are common in more open regions such as promoters. In some species or with some methods this bias may be extreme enough as to make generation of a large number of insertions in coding regions much more difficult.
-  POOL_poolfile_insertionDistribution.txt
+
+  POOL_poolfile_insertionDistribution.txt
     A text file giving raw data for the insertion distribution graph
-  POOL_poolfile_InsertsPerScaffold.pdf
+
+  POOL_poolfile_InsertsPerScaffold.pdf
     Graphs of insertion number versus scaffold length. Useful for detecting bias in insertion rates or problems with genome assembly or insertion mapping.
-  POOL_poolfile_LargestScaffold.pdf
+
+  POOL_poolfile_LargestScaffold.pdf
     Graph of insertion density in a 1000 base-pair rolling window across the largest scaffold, and predicted insertion density if insertions occurred randomly at the same relative rate in promoters, eons, etc as measured in this library.  Useful for understanding how well distributed insertions occur.  Empirically most insertion libraries are not quite random, that is less evenly distributed than a random model would predict, but useful libraries don't have any large scale biases in insertion rates or particularly dominant insertion hot-spots.
 
 --
@@ -373,7 +395,8 @@ RBseq_Calculate_Fitness.py Outputs
 
   pVals.txt
   P-values from T-like test statistics if treated as true T-statistics, after multiple hypothesis correction with the Benjamini-Hochberg procedure.
-  pVals_Wilcoxon.txt
+
+  pVals_Wilcoxon.txt
   P-values from a Wilcoxon Signed Rank Test on normalized BarSeq counts in each condition versus reference samples, after multiple hypothesis correction with the Benjamini-Hochberg procedure.  The signed rank test is less sensitive than T-test approach, but assumes nothing about the distribution of the data, whereas the Pvalues from the Tstats are only valid when the Tstats approximate a normal distribution for truly random data (see QQplots below). Thus the signed rank test P-values should be considered conservative but more robust.
 
   qualityStats.txt
@@ -413,7 +436,8 @@ RBseq_Calculate_Fitness.py Outputs
 
     maxFit
       Maximum fitness score observed in the experiment
-    specificPhenotypes.txt
+  
+  specificPhenotypes.txt
     A table of genes and conditions for which magnitude of fitness scores was greater than the 95 percentile across all experiments + 0.5.  That is is a table of uniquely strong fitness scores.
 
   strainFit.txt
@@ -421,7 +445,8 @@ RBseq_Calculate_Fitness.py Outputs
 
   strainFitUsed.txt
     A table of fitness scores for only the insertions used in fitness analysis
-  QCplots
+
+  QCplots
 
     A folder with the following plots for each condition
 
@@ -437,7 +462,9 @@ RBseq_Calculate_Fitness.py Outputs
     CONDITION_qq.pdf
       A quantile-quantile plot of Tstats versus a standard normal distribution.  If the Tstats followed a perfect standard normal, they would fall along the diagonal line on the plot.  Tstats from theoretically identical populations (e.g. a collection of comparisons between 'Time 0' replicates, or Tstats from the mutant pool grown in the same condition as the library was constructed) should hold closely to this line.  In an experiment in which the Tstats are useful, the Tstats should follow this diagonal line near the origin, then diverge at the edges of the distribution as genes with true fitness effects have more extreme T-stats than would be expected from a normal distribution. If Tstats do not follow this expected pattern, use of the more conservative P-values from the Wilcoxon Signed Rank Test is recommended over using P-values from the Tstats. 
    
-
+
+
+
 --LICENSE--
 Copyright (C) 2019 Samuel Coradetti and the United States Department of Energy. All rights reserved.
 
