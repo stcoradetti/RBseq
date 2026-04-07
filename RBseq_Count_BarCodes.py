@@ -8,8 +8,8 @@ import re
 import os
 import json
 
-Version = '1.1.7'
-ReleaseDate = 'November 20, 2020'
+Version = '1.1.9'
+ReleaseDate = 'April 6, 2026'
 
 
 def OffByOneList(seq):
@@ -127,33 +127,8 @@ def main(argv):
     for stat in statList:
         sumStats[stat] = []
         
-
-    poolFileName = str(metaFrame.loc[fileIndexes[0]]['Poolfile'])
-    if (not options.quietMode):
-        statusUpdate = "Loading mapped barcodes in mutant pool from: " + poolFileName + " (from first line of metadata file)"
-        printUpdate(options.logFile,statusUpdate)
-    poolFileFound = False
-    if not (poolFileName == "NO INPUT"):
-        try:
-            with open(poolFileName, 'rb') as poolFileHandle:
-                poolFrame = pd.read_csv(poolFileHandle,low_memory=False,dtype={'NearestGene':str,'CodingFraction':str},sep='\t')
-                poolFileHandle.close()
-                poolFrame.dropna(how='all')
-                statusUpdate =  "Read "+ str(len(poolFrame)) + " barcodes from "+poolFileName
-                printUpdate(options.logFile,statusUpdate)
-                poolFileFound = True
-        except IOError:
-            statusUpdate =  "Could not read file: "+poolFileName
-            printUpdate(options.logFile,statusUpdate)
-            sys.exit()
-  
-    if poolFileFound:
-        poolCounts = poolFrame[['rcbarcode','scaffold','pos','nMainLocation','nInsert','NearestGene','CodingFraction','LocalGCpercent','AlternateID','Annotation']].copy()
-        poolCounts = poolCounts.rename(index=str, columns={'rcbarcode':'barcode'})
-        poolCounts_byIndex = poolCounts.copy()
-    else:
-        statusUpdate =  "No valid poolfile found on the first line of metadata.  Barcodes will be extracted from sequence data, but no poolcounts file will be generated."
-        printUpdate(options.logFile,statusUpdate)
+    poolCountsDict = {}
+        
 
     if (not options.quietMode):
         statusUpdate = 'Finding barcodes in fastqs and counting occurances'
@@ -363,17 +338,50 @@ def main(argv):
         statusUpdate = "  Total barcodes seen (incudes sequencing errors): " + str(len(barcodeCounts))
         printUpdate(options.logFile,statusUpdate)
         
+        poolFileName = str(metaFrame.loc[fileIndex,'Poolfile'])
+        if (not options.quietMode):
+            statusUpdate = "Loading mapped barcodes in mutant pool from: " + poolFileName + " (from first line of metadata file)"
+            printUpdate(options.logFile,statusUpdate)
+        poolFileFound = False
         
+        if not (poolFileName == "NO INPUT"):
+            try:
+                with open(poolFileName, 'rb') as poolFileHandle:
+                    poolFrame = pd.read_csv(poolFileHandle,low_memory=False,dtype={'NearestGene':str,'CodingFraction':str},sep='\t')
+                    poolFileHandle.close()
+                    poolFrame.dropna(how='all')
+                    statusUpdate =  "Read "+ str(len(poolFrame)) + " barcodes from "+poolFileName
+                    printUpdate(options.logFile,statusUpdate)
+                    poolFileFound = True
+            except IOError:
+                statusUpdate =  "Could not read file: "+poolFileName
+                printUpdate(options.logFile,statusUpdate)
+                sys.exit()
+        
+        if poolFileFound:
+            if not poolFileName in poolCountsDict:
+                poolCountsDict[poolFileName] = poolFrame[['rcbarcode','scaffold','pos','nMainLocation','nInsert','NearestGene','CodingFraction','LocalGCpercent','AlternateID','Annotation']].copy()
+                poolCountsDict[poolFileName] = poolCountsDict[poolFileName].rename(index=str, columns={'rcbarcode':'barcode'})
+            if not indexRow['SampleName'] in poolCountsDict[poolFileName]:
+                poolCountsDict[poolFileName][indexRow['SampleName']] = np.zeros(len(poolCountsDict[poolFileName].index),dtype=int)
+                
+ 
+                
+        else:
+            statusUpdate =  "No valid poolfile found on the first line of metadata.  Barcodes will be extracted from sequence data, but no poolcounts file will be generated."
+            printUpdate(options.logFile,statusUpdate)
+              
         if poolFileFound:
             if (not options.quietMode):
                 statusUpdate = "  Matching barcodes to poolfile"
                 printUpdate(options.logFile,statusUpdate)
 
             barcodeCountsFrame = pd.DataFrame.from_dict(barcodeCounts, orient='index',columns=[fileIndex],dtype=int)
-            poolCounts_byIndex[fileIndex] = barcodeCountsFrame.reindex(poolCounts_byIndex['barcode'],fill_value=0)[fileIndex].values
+            IndexPoolCounts = barcodeCountsFrame.reindex(poolCountsDict[poolFileName]['barcode'],fill_value=0)[fileIndex].values
+            poolCountsDict[poolFileName][indexRow['SampleName']] = poolCountsDict[poolFileName][indexRow['SampleName']] + IndexPoolCounts
 
-            totalReadsInPool = poolCounts_byIndex[fileIndex].sum()
-            NbarcodesInPool = len(poolCounts_byIndex[poolCounts_byIndex[fileIndex] > 0])
+            totalReadsInPool = IndexPoolCounts.sum()
+            NbarcodesInPool = len(np.nonzero(IndexPoolCounts)[0])
 
             statusUpdate = "    Number of barcodes from poolfile seen: " + str(NbarcodesInPool)
             printUpdate(options.logFile,statusUpdate)
@@ -453,6 +461,8 @@ def main(argv):
             statusUpdate = "---------------------"
             printUpdate(options.logFile,statusUpdate)
             
+
+            
     sumStatFrame = pd.DataFrame.from_dict(sumStats)
     fileToSave = outputDir+"fastqSummaryStats.txt"
     statusUpdate = "Saving summary statistics for fastqs to: " + fileToSave
@@ -464,19 +474,21 @@ def main(argv):
 
     statusUpdate = "Processed " + str(len(fileIndexes)) + " sequence files corresponding to " + str(len(sampleList)) + " biological samples."
     printUpdate(options.logFile,statusUpdate)
-            
-    if poolFileFound:
-        for SampleName,group in sampleGroups:
-            poolCounts[SampleName] = poolCounts_byIndex[group.index].sum(axis=1)
+    
+    for poolFileName in poolCountsDict:
+        poolCounts = poolCountsDict[poolFileName]
+        
+        sampleList = metaFrame[metaFrame['Poolfile'] == poolFileName]['SampleName'].unique()
+        print(sampleList)
 
         totalCounts = poolCounts[sampleList].sum(axis=1)
         nSeenInPool = totalCounts.astype(bool).sum()
         nCounts = totalCounts.sum()
 
-        statusUpdate = "Counted " + str(nCounts) + " total reads for " + str(nSeenInPool) + " mapped barcodes from the mutant pool."
+        statusUpdate = "Counted " + str(nCounts) + " total reads for " + str(nSeenInPool) + " mapped barcodes from the mutant pool in " + poolFileName
         printUpdate(options.logFile,statusUpdate)
 
-        fileToSave = outputDir+"poolCount.txt"
+        fileToSave = outputDir+poolFileName.split('/')[-1]+"_poolCount.txt"
         statusUpdate = "Saving poolcount file to: " + fileToSave
         printUpdate(options.logFile,statusUpdate)
         poolCounts.to_csv(fileToSave,sep='\t',index=None)
