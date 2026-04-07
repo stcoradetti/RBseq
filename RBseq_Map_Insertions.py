@@ -6,11 +6,12 @@ import operator
 import pandas as pd
 from datetime import datetime
 import re
-from Bio.Blast.Applications import NcbiblastnCommandline
+
+import subprocess
 import os
 
-Version = '1.1.7'
-ReleaseDate = 'November 20, 2020'
+Version = '1.1.9'
+ReleaseDate = 'April 6, 2026'
 
 
 #http://code.activestate.com/recipes/576874-levenshtein-distance/
@@ -161,6 +162,8 @@ def main(argv):
         printUpdate(options.logFile,statusUpdate)
         sys.exit()
         
+  
+        
 
     #Get a list of fastqs and matching model files from the metadata
     fastqFiles=metaFrame['Fastq'].values
@@ -191,8 +194,13 @@ def main(argv):
         
     
         for fastqNum,fastqFile in enumerate(fastqFiles):
+            
+
+                    
+            
             statusUpdate = '  Mapping reads from '+fastqFile+' using insertion model '+modelFiles[fastqNum]
             printUpdate(options.logFile,statusUpdate)
+            
 
             #Load and parse modelfile
             fileToOpen = modelFiles[fastqNum]
@@ -420,9 +428,28 @@ def main(argv):
             #Blast query sequences against genome
             statusUpdate = "  BLASTING reads against "+genomeFiles[fastqNum]
             printUpdate(options.logFile,statusUpdate)
-            blastGenome = NcbiblastnCommandline(query=blastQueryFileName, db=genomeFiles[fastqNum], perc_identity=options.minPercentID, evalue=options.maxEvalue, outfmt=6, out=outputDirs[fastqNum]+shortNames[fastqNum]+"_blastGenome.txt")
-            BlastOutputFile = outputDirs[fastqNum]+shortNames[fastqNum]+"_blastGenome.txt"
-            stdout, stderr = blastGenome()
+            
+            blastGenomeText = ['blastn']
+            blastGenomeText.append('-out')
+            blastGenomeText.append(outputDirs[fastqNum]+shortNames[fastqNum]+"_blastGenome.txt")
+            blastGenomeText.append('-outfmt')
+            blastGenomeText.append('6')
+            blastGenomeText.append('-query')
+            blastGenomeText.append(blastQueryFileName)
+            blastGenomeText.append('-db')
+            blastGenomeText.append(genomeFiles[fastqNum])
+            blastGenomeText.append('-evalue')
+            blastGenomeText.append(str(options.maxEvalue))
+            blastGenomeText.append('-perc_identity')
+            blastGenomeText.append(str(options.minPercentID))
+            
+            blastInsertSubProcess = subprocess.run(blastGenomeText, capture_output=True )
+            printUpdate(options.logFile,"    BLAST stderr (blank is good): "+blastInsertSubProcess.stderr.decode())
+            
+            
+            #blastGenome = NcbiblastnCommandline(query=blastQueryFileName, db=genomeFiles[fastqNum], perc_identity=options.minPercentID, evalue=options.maxEvalue, outfmt=6, out=outputDirs[fastqNum]+shortNames[fastqNum]+"_blastGenome.txt")
+            #BlastOutputFile = outputDirs[fastqNum]+shortNames[fastqNum]+"_blastGenome.txt"
+            #stdout, stderr = blastGenome()
 
             mappedReads = {}
             try:
@@ -476,8 +503,26 @@ def main(argv):
             if not options.noInsertHits:
                 statusUpdate = "  BLASTING reads against full insertion sequence in "+insertionFiles[fastqNum]
                 printUpdate(options.logFile,statusUpdate)
-                blastInsert = NcbiblastnCommandline(query=blastQueryFileName, db=insertionFiles[fastqNum], perc_identity=options.minPercentID, evalue=options.maxEvalue, outfmt=6, out=outputDirs[fastqNum]+shortNames[fastqNum]+"_blastInsert.txt")
-                stdout, stderr = blastInsert()
+                
+                blastInsertText = ['blastn']
+                blastInsertText.append('-out')
+                blastInsertText.append(outputDirs[fastqNum]+shortNames[fastqNum]+"_blastInsert.txt")
+                blastInsertText.append('-outfmt')
+                blastInsertText.append('6')
+                blastInsertText.append('-query')
+                blastInsertText.append(blastQueryFileName)
+                blastInsertText.append('-db')
+                blastInsertText.append(insertionFiles[fastqNum])
+                blastInsertText.append('-evalue')
+                blastInsertText.append(str(options.maxEvalue))
+                blastInsertText.append('-perc_identity')
+                blastInsertText.append(str(options.minPercentID))
+                
+                blastInsertSubProcess = subprocess.run(blastInsertText, capture_output=True )
+                printUpdate(options.logFile,"    BLAST stderr (blank is good): "+blastInsertSubProcess.stderr.decode())
+                
+                #blastInsert = NcbiblastnCommandline(query=blastQueryFileName, db=insertionFiles[fastqNum], perc_identity=options.minPercentID, evalue=options.maxEvalue, outfmt=6, out=outputDirs[fastqNum]+shortNames[fastqNum]+"_blastInsert.txt")
+                #stdout, stderr = blastInsert()
 
                 newReadsMapped = 0
                 try:
@@ -741,6 +786,7 @@ def main(argv):
                     primeLocationAbundance = sorted_locations[0][1]
 
             #Print out summary
+            barcode_to_insert[barcode].pop("Null:0:+",0)
             barcodeSummary = "\t".join([barcode,ReverseComplement(barcode),str(totals[barcode]), str(totals[barcode]-highQbegreads), firstLocation[0], firstLocation[2], firstLocation[1],insertionType,str(primeLocationAbundance), str(insertReads), str(sorted_locations), str(barcode_to_insert[barcode])])
 
             if insertionType in ["Single","Concat","InCat"]:

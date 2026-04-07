@@ -4,15 +4,13 @@ import argparse
 import numpy as np
 import pandas as pd
 from datetime import datetime
-import re
 import os
-import matplotlib
 import matplotlib.pyplot as plt
 from scipy import stats
 import statsmodels.stats.multitest as smm
 
-Version = '1.1.7'
-ReleaseDate = 'November 20, 2020'
+Version = '1.1.9'
+ReleaseDate = 'April 6, 2026'
 
 
 pd.set_option('display.max_columns', 500)
@@ -216,6 +214,7 @@ def main(argv):
         #calculate weighting factors for each strain fitness score, will need to mask out unused strains later
         weightingFactors[sampNum] = (np.log(2)**2) / (1.0 / (1 + poolCounts[sampleNames[sampNum]]) + 1.0 / (1 + poolCounts[references[sampNum]]))
 
+ 
     #maximum weights for any strain is that of a strain with maximumWeightCounts (e.g. 20) in both sample and reference condition
     maxWeight = (np.log(2)**2) / (1.0 / (1 + options.maxWeightCounts) + 1.0 / (1 + options.maxWeightCounts))
     weightingFactors[sampleNumbers] = np.ma.masked_outside(weightingFactors[sampleNumbers],0,maxWeight).filled(maxWeight)
@@ -226,13 +225,14 @@ def main(argv):
 
     #mask out insertions in genes without sufficient total counts per gene
     #for comparing 1st and 2nd half of genes, both halves must meet minimum counts per gene requirement
-    summedByGene = eligibleCounts.groupby('NearestGene')[sampleNumbers].transform(np.sum)
-    summedByGene1 = eligibleCounts1.groupby('NearestGene')[sampleNumbers].transform(np.sum)
-    summedByGene2 = eligibleCounts2.groupby('NearestGene')[sampleNumbers].transform(np.sum)
-    summedByGeneHalves = pd.concat([summedByGene1, summedByGene2]).min(level=0)
+    summedByGene = eligibleCounts.groupby('NearestGene')[sampleNumbers].transform('sum')
+    summedByGene1 = eligibleCounts1.groupby('NearestGene')[sampleNumbers].transform('sum')
+    summedByGene2 = eligibleCounts2.groupby('NearestGene')[sampleNumbers].transform('sum')
+    summedByGeneHalves = pd.concat([summedByGene1, summedByGene2]).groupby(level=0).min()
     includeMask[sampleNumbers] = includeMask[sampleNumbers] & np.ma.masked_outside(summedByGene,0,options.minGeneCounts).mask
     includeMask1[sampleNumbers] = includeMask1[sampleNumbers] & np.ma.masked_outside(summedByGeneHalves,0,options.minGeneCounts).mask
     includeMask2[sampleNumbers] = includeMask2[sampleNumbers] & np.ma.masked_outside(summedByGeneHalves,0,options.minGeneCounts).mask
+
 
     #if inserts meet minimum criteria in one replicate of a set, compute fitness across all replicates
     for group,sampList in groupSampNumbers.items(): 
@@ -243,9 +243,9 @@ def main(argv):
 
     #mask out insertions for genes without enough insertions that meet other critera for fitness calculations
     #for comparing 1st and 2nd half of genes, both halves must meet minimum insertions per gene requirement
-    enoughInserts = np.ma.masked_outside(includeMask.groupby('NearestGene')[sampleNumbers].transform(np.sum),0,options.minInsertions-1).mask
-    enoughInserts1 = np.ma.masked_outside(includeMask1.groupby('NearestGene')[sampleNumbers].transform(np.sum),0,options.minInsertions-1).mask
-    enoughInserts2 = np.ma.masked_outside(includeMask2.groupby('NearestGene')[sampleNumbers].transform(np.sum),0,options.minInsertions-1).mask
+    enoughInserts = np.ma.masked_outside(includeMask.groupby('NearestGene')[sampleNumbers].transform('sum'),0,options.minInsertions-1).mask
+    enoughInserts1 = np.ma.masked_outside(includeMask1.groupby('NearestGene')[sampleNumbers].transform('sum'),0,options.minInsertions-1).mask
+    enoughInserts2 = np.ma.masked_outside(includeMask2.groupby('NearestGene')[sampleNumbers].transform('sum'),0,options.minInsertions-1).mask
     enoughInsertsHalves = enoughInserts1 & enoughInserts2
 
     
@@ -295,9 +295,9 @@ def main(argv):
     geneGroups = weightingFactors.groupby('NearestGene')
     geneGroups1 = weightingFactors1.groupby('NearestGene')
     geneGroups2 = weightingFactors2.groupby('NearestGene')
-    weights[sampleNumbers] = weightingFactors[sampleNumbers]/geneGroups[sampleNumbers].transform(np.sum)
-    weights1[sampleNumbers] = weightingFactors1[sampleNumbers]/geneGroups1[sampleNumbers].transform(np.sum)
-    weights2[sampleNumbers] = weightingFactors2[sampleNumbers]/geneGroups2[sampleNumbers].transform(np.sum)
+    weights[sampleNumbers] = weightingFactors[sampleNumbers]/geneGroups[sampleNumbers].transform('sum')
+    weights1[sampleNumbers] = weightingFactors1[sampleNumbers]/geneGroups1[sampleNumbers].transform('sum')
+    weights2[sampleNumbers] = weightingFactors2[sampleNumbers]/geneGroups2[sampleNumbers].transform('sum')
     weightedFit[sampleNumbers] = strainFit[sampleNumbers] * weights[sampleNumbers]
     weightedFit1[sampleNumbers] = strainFit[sampleNumbers] * weights1[sampleNumbers]
     weightedFit2[sampleNumbers] = strainFit[sampleNumbers] * weights2[sampleNumbers]
@@ -465,7 +465,7 @@ def main(argv):
 
     #Observed variance
     weightedResidules = weightedFit.copy()
-    residules = strainFit[sampleNumbers] - weightedFit.groupby('NearestGene')[sampleNumbers].transform(np.sum)
+    residules = strainFit[sampleNumbers] - weightedFit.groupby('NearestGene')[sampleNumbers].transform('sum')
     weightedResidules[sampleNumbers] = residules**2 * weights[sampleNumbers]
     geneResidules = weightedResidules.groupby('NearestGene')[sampleNumbers].sum()
     Nused = includeMask.groupby('NearestGene')[sampleNumbers].sum()
@@ -482,11 +482,11 @@ def main(argv):
     VeAverages = (geneResidulesAverages + VgAverages)/NusedTotals
 
     #calculate T-stats
-    maxVar = pd.concat([Vn, Ve]).max(level=0) + 0.01
+    maxVar = pd.concat([Vn, Ve]).groupby(level=0).max() + 0.01
     Tstats = geneFit.copy()
     Tstats[sampleNumbers] = geneFit[sampleNumbers]/(maxVar**(0.5))
 
-    maxVarAverages = pd.concat([VnAverages, VeAverages]).max(level=0) + 0.01
+    maxVarAverages = pd.concat([VnAverages, VeAverages]).groupby(level=0).max() + 0.01
     TstatsAverages = geneFitAverages.copy()
     TstatsAverages[groupSet] = geneFitAverages[groupSet]/(maxVarAverages**(0.5))
 
@@ -502,7 +502,7 @@ def main(argv):
         analyzedGenes = analyzedGenes & (abs(TstatsAverages[replicateGroup]) > 0)
         result = stats.t.sf(TstatsAverages[analyzedGenes][replicateGroup].abs(), NusedTotals[analyzedGenes][replicateGroup]-1)*2
         adjusted = smm.multipletests(result, alpha=0.1, method='fdr_bh')[1]
-        pVals[replicateGroup] = 1
+        pVals[replicateGroup] = 1.0
         pVals.loc[pVals[analyzedGenes].index,replicateGroup] = adjusted
 
     statusUpdate = 'Saving pValues from T-like statistics in ' + outputDirs[0]+'pVals.txt'
@@ -689,10 +689,10 @@ def main(argv):
         groupGenic[replicateGroup] = genicCounts[groupSampNumbers[replicateGroup]].sum(axis=1).astype('bool').astype('int').sum()
         groupUsed[replicateGroup] = usedCounts[groupSampNumbers[replicateGroup]].sum(axis=1).astype('bool').astype('int').sum()
         groupUsedCounts[replicateGroup] = usedCounts[groupSampNumbers[replicateGroup]].sum(axis=1)
-        groupMean[replicateGroup] = groupUsedCounts.groupby('NearestGene')[replicateGroup].sum().replace(0, np.NaN).mean()
-        groupMedian[replicateGroup] = groupUsedCounts.groupby('NearestGene')[replicateGroup].sum().replace(0, np.NaN).median()
+        groupMean[replicateGroup] = groupUsedCounts.groupby('NearestGene')[replicateGroup].sum().replace(0, np.nan).mean()
+        groupMedian[replicateGroup] = groupUsedCounts.groupby('NearestGene')[replicateGroup].sum().replace(0, np.nan).median()
         groupUsedRefCounts[replicateGroup] = usedCountsRefs[groupSampNumbers[replicateGroup]].sum(axis=1)
-        groupRefMedian[replicateGroup] = groupUsedRefCounts.groupby('NearestGene')[replicateGroup].sum().replace(0, np.NaN).median()
+        groupRefMedian[replicateGroup] = groupUsedRefCounts.groupby('NearestGene')[replicateGroup].sum().replace(0, np.nan).median()
         adjacentFit = positionalFit[replicateGroup].dropna()
         groupAdjCor[replicateGroup] = np.corrcoef(adjacentFit,np.roll(adjacentFit,1))[0,1]
 
@@ -897,7 +897,7 @@ def main(argv):
 
         adjusted = smm.multipletests(analyzedPvals, alpha=0.1, method='fdr_bh')[1]
         
-        wilcoxonPvals[replicateGroup] = 1
+        wilcoxonPvals[replicateGroup] = 1.0
         for idx,gene in enumerate(analyzedGenes):
             wilcoxonPvals.loc[gene,replicateGroup] = adjusted[idx]
 
@@ -958,6 +958,7 @@ def wilcoxonExact(cond1,cond2):
             absList = sortedFrame['abs']
             ranks = list(range(1,N+1))
             sortedFrame['rank'] = ranks
+            sortedFrame['rank'] = sortedFrame['rank'].astype(float)
 
             for absVal,group in sortedFrame.groupby('abs'):
                 if len(group) > 1:

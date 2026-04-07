@@ -10,8 +10,8 @@ import collections
 import matplotlib.pyplot as plt
 import argparse
 
-Version = '1.1.7'
-ReleaseDate = 'November 20, 2020'
+Version = '1.1.9'
+ReleaseDate = 'April 6, 2026'
 
 
 def printUpdate(logfile,update):
@@ -110,7 +110,7 @@ def main(argv):
             GeneIdentier = 'Parent'
         scaffoldSequences = SeqIO.to_dict(SeqIO.parse(genomeFiles[poolNum]+".fasta", "fasta"))
         
-        #Load gene locations
+        #Load gene locations from GFF
         try:
             with open(gffFileName, 'rb') as FileHandle:
                 genestext = FileHandle.readlines()
@@ -215,20 +215,21 @@ def main(argv):
                                                  '3pu':[],
                                                  'Parent':notes['Parent'],
                                                  'GeneIdentifier':notes[GeneIdentifier]}
-                elif featureType == 'CDS':
+                    
+                else:
                     notes = dict((k.strip(), v.strip()) for k,v in
                                   (item.split('=') for item in comments.split(';')))
-                    if len(Genes[notes['Parent']]['exon']) > 0:
-                        Genes[notes['Parent']]['intron'].append([Genes[notes['Parent']]['exon'][-1][1]+1,start-1])
-                    Genes[notes['Parent']]['exon'].append([start,end])
-                elif featureType == 'five_prime_UTR':
-                    notes = dict((k.strip(), v.strip()) for k,v in
-                                  (item.split('=') for item in comments.split(';')))
-                    Genes[notes['Parent']]['5pu'] = [start,end]
-                elif featureType == 'three_prime_UTR':
-                    notes = dict((k.strip(), v.strip()) for k,v in
-                                  (item.split('=') for item in comments.split(';')))
-                    Genes[notes['Parent']]['3pu'] = [start,end]
+                    
+                    
+                    if ('Parent' in notes) and (notes['Parent'] in Genes):
+                        if featureType == 'CDS':
+                            if len(Genes[notes['Parent']]['exon']) > 0:
+                                Genes[notes['Parent']]['intron'].append([Genes[notes['Parent']]['exon'][-1][1]+1,start-1])
+                            Genes[notes['Parent']]['exon'].append([start,end])
+                        elif featureType == 'five_prime_UTR':
+                            Genes[notes['Parent']]['5pu'] = [start,end]
+                        elif featureType == 'three_prime_UTR':
+                            Genes[notes['Parent']]['3pu'] = [start,end]
 
 
         #Build list of locations in the genome and in genic and non-genic regions
@@ -485,7 +486,7 @@ def main(argv):
         plt.xticks(fontsize=8)
         plt.xlabel('Position (Mb)',fontsize=8,labelpad=1)
         plt.ylabel('Inserts/Kb',fontsize=8,labelpad=1)
-        plt.yticks([-0.5,0,1,2,3],[0,1,10,100],fontsize=8)
+        plt.yticks([-0.5,0,1,2,3],[0,1,10,100,1000],fontsize=8)
         plt.title('Insert density across scaffold '+scaffold.split(" ")[0],fontsize=10)
         plt.gcf().subplots_adjust(bottom=0.16, left=0.14, right=0.98, top=0.90)
         legend = plt.legend(loc='upper center',edgecolor=None,frameon=False,fontsize=8,ncol=2)
